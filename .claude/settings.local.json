@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\" -File | Where-Object {$_.Name -ne \".gitignore\"})",
+      "Bash(gh repo *)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); gh auth status 2>&1)"
+    ]
+  }
+}

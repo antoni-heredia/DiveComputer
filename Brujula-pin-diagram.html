@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brujula — Diagrama de Pines ESP32-C3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0D1117;
+      --surface:  #161B22;
+      --border:   #30363D;
+      --text:     #C9D1D9;
+      --muted:    #6E7681;
+      --c-tft:    #FF9800;
+      --c-mag:    #4CAF50;
+      --c-accel:  #2196F3;
+      --c-power:  #F44336;
+      --c-gnd:    #8B949E;
+      --c-unused: #30363D;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── HEADER ── */
+    header {
+      padding: 24px 32px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-left h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+    .header-left p {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .copy-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      transition: background .2s, border-color .2s;
+    }
+    .copy-btn:hover { background: #21262D; border-color: #58A6FF; }
+
+    /* ── MAIN LAYOUT ── */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 0;
+      min-height: calc(100vh - 120px);
+    }
+
+    /* ── BOARD PANEL ── */
+    .board-panel {
+      border-right: 1px solid var(--border);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      height: fit-content;
+    }
+    .board-panel h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* ── COMPONENT CARDS ── */
+    .cards-panel {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .cards-panel h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 4px;
+    }
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      transition: border-color .2s, transform .15s;
+    }
+    .card:hover { border-color: #58A6FF; transform: translateY(-1px); }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .color-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .card-name {
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .card-full-name {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .voltage-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 10px;
+    }
+    .voltage-33 { background: rgba(33, 150, 243, 0.15); color: #64B5F6; border: 1px solid rgba(33,150,243,.3); }
+    .voltage-5  { background: rgba(244, 67, 54, 0.15);  color: #EF9A9A; border: 1px solid rgba(244,67,54,.3); }
+    .voltage-multi { background: rgba(156, 39, 176, 0.15); color: #CE93D8; border: 1px solid rgba(156,39,176,.3); }
+    .warning-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255, 152, 0, 0.1);
+      border: 1px solid rgba(255,152,0,.3);
+      color: #FFB74D;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+    .pin-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .pin-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+    .pin-num {
+      background: #21262D;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      min-width: 48px;
+      text-align: center;
+      color: #E6EDF3;
+    }
+    .pin-role { color: var(--muted); }
+    .datasheet-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 12px;
+      font-size: 11px;
+      color: #58A6FF;
+      text-decoration: none;
+      transition: color .2s;
+    }
+    .datasheet-link:hover { color: #79C0FF; text-decoration: underline; }
+
+    /* ── TABLE SECTION ── */
+    .table-section {
+      grid-column: 1 / -1;
+      border-top: 1px solid var(--border);
+      padding: 24px 32px 48px;
+    }
+    .table-section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead th {
+      text-align: left;
+      padding: 10px 14px;
+      background: #161B22;
+      border-bottom: 2px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    thead th:hover { color: var(--text); }
+    thead th::after { content: ' ↕'; opacity: .4; }
+    thead th.asc::after { content: ' ↑'; opacity: 1; }
+    thead th.desc::after { content: ' ↓'; opacity: 1; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+    tbody tr:hover { background: #1C2128; }
+    tbody td {
+      padding: 10px 14px;
+      font-family: 'JetBrains Mono', monospace;
+      vertical-align: middle;
+    }
+    .td-pin {
+      font-weight: 600;
+      color: #E6EDF3;
+    }
+    .td-component {
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+    }
+    .td-note {
+      font-family: 'Inter', sans-serif;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .row-tint-tft   { background: rgba(255, 152,   0, 0.04); }
+    .row-tint-mag   { background: rgba( 76, 175,  80, 0.04); }
+    .row-tint-accel { background: rgba( 33, 150, 243, 0.04); }
+    .row-tint-power { background: rgba(244,  67,  54, 0.04); }
+    .row-tint-gnd   { background: rgba(139, 148, 158, 0.04); }
+    .shared-badge {
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      background: rgba(255,255,255,.07);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 6px;
+      color: var(--muted);
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 16px;
+      color: var(--muted);
+      font-size: 11px;
+      border-top: 1px solid var(--border);
+      grid-column: 1 / -1;
+    }
+
+    /* ── LEGEND ── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 700px) {
+      .main-layout { grid-template-columns: 1fr; }
+      .board-panel { border-right: none; border-bottom: 1px solid var(--border); position: static; }
+      .table-section { padding: 16px; }
+    }
+
+    /* ── PRINT ── */
+    @media print {
+      body { background: #fff; color: #000; }
+      .board-panel, .cards-panel, .table-section { background: #fff; }
+      .card { border-color: #ccc; }
+      .copy-btn { display: none; }
+    }
+
+    /* ── SVG tooltips ── */
+    .pin-tip {
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .15s;
+    }
+    .board-svg .pin-group:hover .pin-tip { opacity: 1; }
+    .board-svg .pin-group:hover circle,
+    .board-svg .pin-group:hover rect { filter: brightness(1.4); }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════ HEADER ════════════════ -->
+<header>
+  <div class="header-left">
+    <h1>🧭 Brujula — Diagrama de Pines</h1>
+    <p>ESP32-C3 DevKitC-02 &nbsp;·&nbsp; PlatformIO / Arduino Framework &nbsp;·&nbsp; Generado 2026-05-30</p>
+  </div>
+  <button class="copy-btn" onclick="copyEmbed()">📋 Copiar HTML</button>
+</header>
+
+<div class="main-layout">
+
+  <!-- ════════════════ BOARD SVG PANEL ════════════════ -->
+  <div class="board-panel">
+    <h2>Placa ESP32-C3 DevKitC-02</h2>
+
+    <svg class="board-svg" viewBox="0 0 280 520" width="280" height="520" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="2.5" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <linearGradient id="boardGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1a3a2a"/>
+          <stop offset="100%" stop-color="#0e2218"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Board body -->
+      <rect x="50" y="30" width="180" height="460" rx="10" ry="10" fill="url(#boardGrad)" stroke="#2a5a3a" stroke-width="1.5"/>
+
+      <!-- USB-C connector -->
+      <rect x="105" y="16" width="70" height="22" rx="5" fill="#3a3a3a" stroke="#555" stroke-width="1"/>
+      <text x="140" y="30" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#888">USB-C</text>
+
+      <!-- Chip area -->
+      <rect x="90" y="180" width="100" height="80" rx="4" fill="#1a2a1a" stroke="#2a4a2a" stroke-width="1"/>
+      <text x="140" y="217" text-anchor="middle" font-family="JetBrains Mono" font-size="7" fill="#4a7a5a">ESP32-C3</text>
+      <text x="140" y="228" text-anchor="middle" font-family="JetBrains Mono" font-size="6" fill="#2a5a3a">MINI-1</text>
+
+      <!-- Antenna area -->
+      <rect x="165" y="40" width="55" height="70" rx="3" fill="#152515" stroke="#1a4a1a" stroke-width="1" stroke-dasharray="3,2"/>
+      <text x="192" y="75" text-anchor="middle" font-family="JetBrains Mono" font-size="6" fill="#2a5a2a">ANT</text>
+
+      <!-- ─── LEFT PINS (top to bottom): GND, 3V3, IO4, IO5, IO6(SDA), IO7(SCL), IO8(MOSI), IO9(SCLK), IO10, IO11, IO12, IO13, IO14, IO15, IO16, IO17, IO18, IO19, IO20 ─── -->
+
+      <!-- Helper macro: left pin at y, color, label-right, label-left -->
+      <!-- GND -->
+      <g class="pin-group">
+        <line x1="20" y1="60" x2="50" y2="60" stroke="#555" stroke-width="1.5"/>
+        <circle cx="15" cy="60" r="6" fill="#8B949E" stroke="#555" stroke-width="1"/>
+        <text x="55" y="64" font-family="JetBrains Mono" font-size="8" fill="#8B949E">GND</text>
+        <g class="pin-tip" transform="translate(15,52)">
+          <rect x="-18" y="-14" width="36" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">GND</text>
+        </g>
+      </g>
+
+      <!-- 3V3 -->
+      <g class="pin-group">
+        <line x1="20" y1="82" x2="50" y2="82" stroke="#555" stroke-width="1.5"/>
+        <circle cx="15" cy="82" r="6" fill="#F44336" stroke="#c62828" stroke-width="1" filter="url(#glow)"/>
+        <text x="55" y="86" font-family="JetBrains Mono" font-size="8" fill="#F44336">3V3</text>
+        <g class="pin-tip" transform="translate(15,74)">
+          <rect x="-22" y="-14" width="44" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">3.3 V Power</text>
+        </g>
+      </g>
+
+      <!-- IO4 (unused) -->
+      <g class="pin-group">
+        <line x1="20" y1="104" x2="50" y2="104" stroke="#333" stroke-width="1.5"/>
+        <circle cx="15" cy="104" r="5" fill="#30363D" stroke="#444" stroke-width="1"/>
+        <text x="55" y="108" font-family="JetBrains Mono" font-size="8" fill="#444">IO4</text>
+      </g>
+
+      <!-- IO5 (unused) -->
+      <g class="pin-group">
+        <line x1="20" y1="126" x2="50" y2="126" stroke="#333" stroke-width="1.5"/>
+        <circle cx="15" cy="126" r="5" fill="#30363D" stroke="#444" stroke-width="1"/>
+        <text x="55" y="130" font-family="JetBrains Mono" font-size="8" fill="#444">IO5</text>
+      </g>
+
+      <!-- IO6 = SDA (I2C shared: MAG + ACCEL) -->
+      <g class="pin-group">
+        <line x1="20" y1="148" x2="50" y2="148" stroke="#555" stroke-width="1.5"/>
+        <circle cx="15" cy="148" r="6" fill="#9C27B0" stroke="#6a1b9a" stroke-width="1" filter="url(#glow)"/>
+        <text x="55" y="152" font-family="JetBrains Mono" font-size="8" fill="#CE93D8">IO6 SDA</text>
+        <g class="pin-tip" transform="translate(15,138)">
+          <rect x="-28" y="-14" width="76" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">IO6 · I2C SDA · MAG + ACCEL</text>
+        </g>
+      </g>
+
+      <!-- IO7 = SCL (I2C shared: MAG + ACCEL) -->
+      <g class="pin-group">
+        <line x1="20" y1="170" x2="50" y2="170" stroke="#555" stroke-width="1.5"/>
+        <circle cx="15" cy="170" r="6" fill="#9C27B0" stroke="#6a1b9a" stroke-width="1" filter="url(#glow)"/>
+        <text x="55" y="174" font-family="JetBrains Mono" font-size="8" fill="#CE93D8">IO7 SCL</text>
+        <g class="pin-tip" transform="translate(15,160)">
+          <rect x="-28" y="-14" width="76" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">IO7 · I2C SCL · MAG + ACCEL</text>
+        </g>
+      </g>
+
+      <!-- IO8 = SPI MOSI (TFT) -->
+      <g class="pin-group">
+        <line x1="20" y1="270" x2="50" y2="270" stroke="#555" stroke-width="1.5"/>
+        <circle cx="15" cy="270" r="6" fill="#FF9800" stroke="#e65100" stroke-width="1" filter="url(#glow)"/>
+        <text x="55" y="274" font-family="JetBrains Mono" font-size="8" fill="#FF9800">IO8 MOSI</text>
+        <g class="pin-tip" transform="translate(15,260)">
+          <rect x="-28" y="-14" width="72" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">IO8 · SPI MOSI · TFT ST7735</text>
+        </g>
+      </g>
+
+      <!-- IO9 = SPI SCLK (TFT) -->
+      <g class="pin-group">
+        <line x1="20" y1="292" x2="50" y2="292" stroke="#555" stroke-width="1.5"/>
+        <circle cx="15" cy="292" r="6" fill="#FF9800" stroke="#e65100" stroke-width="1" filter="url(#glow)"/>
+        <text x="55" y="296" font-family="JetBrains Mono" font-size="8" fill="#FF9800">IO9 SCLK</text>
+        <g class="pin-tip" transform="translate(15,282)">
+          <rect x="-28" y="-14" width="72" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">IO9 · SPI CLK · TFT ST7735</text>
+        </g>
+      </g>
+
+      <!-- IO10-IO20 unused (collapsed) -->
+      <text x="55" y="320" font-family="JetBrains Mono" font-size="7" fill="#333">IO10–IO20 (no usados)</text>
+
+      <!-- ─── RIGHT PINS (top to bottom): 5V, GND, IO0(RST), IO1(DC), IO2(CS), IO3, IO21 ─── -->
+
+      <!-- 5V -->
+      <g class="pin-group">
+        <line x1="230" y1="60" x2="265" y2="60" stroke="#555" stroke-width="1.5"/>
+        <circle cx="270" cy="60" r="6" fill="#FF5722" stroke="#bf360c" stroke-width="1" filter="url(#glow)"/>
+        <text x="225" y="64" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="#FF5722">5V</text>
+        <g class="pin-tip" transform="translate(270,52)">
+          <rect x="-22" y="-14" width="44" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">5 V (USB)</text>
+        </g>
+      </g>
+
+      <!-- GND right -->
+      <g class="pin-group">
+        <line x1="230" y1="82" x2="265" y2="82" stroke="#555" stroke-width="1.5"/>
+        <circle cx="270" cy="82" r="6" fill="#8B949E" stroke="#555" stroke-width="1"/>
+        <text x="225" y="86" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="#8B949E">GND</text>
+      </g>
+
+      <!-- IO0 = TFT_RST -->
+      <g class="pin-group">
+        <line x1="230" y1="148" x2="265" y2="148" stroke="#555" stroke-width="1.5"/>
+        <circle cx="270" cy="148" r="6" fill="#FF9800" stroke="#e65100" stroke-width="1" filter="url(#glow)"/>
+        <text x="225" y="152" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="#FF9800">IO0 RST</text>
+        <g class="pin-tip" transform="translate(270,138)">
+          <rect x="-30" y="-14" width="70" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">IO0 · TFT_RST · ST7735</text>
+        </g>
+      </g>
+
+      <!-- IO1 = TFT_DC -->
+      <g class="pin-group">
+        <line x1="230" y1="170" x2="265" y2="170" stroke="#555" stroke-width="1.5"/>
+        <circle cx="270" cy="170" r="6" fill="#FF9800" stroke="#e65100" stroke-width="1" filter="url(#glow)"/>
+        <text x="225" y="174" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="#FF9800">IO1 DC</text>
+        <g class="pin-tip" transform="translate(270,160)">
+          <rect x="-28" y="-14" width="68" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">IO1 · TFT_DC · ST7735</text>
+        </g>
+      </g>
+
+      <!-- IO2 = TFT_CS -->
+      <g class="pin-group">
+        <line x1="230" y1="192" x2="265" y2="192" stroke="#555" stroke-width="1.5"/>
+        <circle cx="270" cy="192" r="6" fill="#FF9800" stroke="#e65100" stroke-width="1" filter="url(#glow)"/>
+        <text x="225" y="196" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="#FF9800">IO2 CS</text>
+        <g class="pin-tip" transform="translate(270,182)">
+          <rect x="-28" y="-14" width="68" height="12" rx="3" fill="#2a2a2a" stroke="#555"/>
+          <text text-anchor="middle" y="-5" font-family="JetBrains Mono" font-size="7" fill="#C9D1D9">IO2 · TFT_CS · ST7735</text>
+        </g>
+      </g>
+
+      <!-- IO3 unused -->
+      <g class="pin-group">
+        <line x1="230" y1="214" x2="265" y2="214" stroke="#333" stroke-width="1.5"/>
+        <circle cx="270" cy="214" r="5" fill="#30363D" stroke="#444" stroke-width="1"/>
+        <text x="225" y="218" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="#444">IO3</text>
+      </g>
+
+      <!-- IO21 unused -->
+      <g class="pin-group">
+        <line x1="230" y1="236" x2="265" y2="236" stroke="#333" stroke-width="1.5"/>
+        <circle cx="270" cy="236" r="5" fill="#30363D" stroke="#444" stroke-width="1"/>
+        <text x="225" y="240" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="#444">IO21</text>
+      </g>
+
+      <!-- Board label -->
+      <text x="140" y="430" text-anchor="middle" font-family="Inter" font-size="9" fill="#2a5a3a" font-weight="600">ESP32-C3-DevKitC-02</text>
+      <text x="140" y="445" text-anchor="middle" font-family="JetBrains Mono" font-size="7" fill="#2a4a2a">3.3 V Logic · Wi-Fi + BLE</text>
+    </svg>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#FF9800"></div>ST7735 TFT</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div>HMC5883L Mag</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2196F3"></div>LSM303 Accel</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#9C27B0"></div>I2C Bus</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F44336"></div>3.3 V</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#8B949E"></div>GND</div>
+    </div>
+  </div>
+
+  <!-- ════════════════ COMPONENT CARDS ════════════════ -->
+  <div class="cards-panel">
+    <h2>Componentes detectados</h2>
+    <div class="cards-grid">
+
+      <!-- ST7735 TFT -->
+      <div class="card">
+        <div class="card-header">
+          <div class="color-swatch" style="background:#FF9800"></div>
+          <span class="card-name">ST7735 TFT</span>
+        </div>
+        <div class="card-full-name">Adafruit ST7735 — Pantalla TFT SPI 128×160 1.8"</div>
+        <span class="voltage-badge voltage-33">3.3 V</span>
+        <ul class="pin-list">
+          <li><span class="pin-num">IO2</span><span class="pin-role">TFT_CS — Chip Select</span></li>
+          <li><span class="pin-num">IO1</span><span class="pin-role">TFT_DC — Data/Command</span></li>
+          <li><span class="pin-num">IO0</span><span class="pin-role">TFT_RST — Reset</span></li>
+          <li><span class="pin-num">IO8</span><span class="pin-role">TFT_MOSI — SPI Data</span></li>
+          <li><span class="pin-num">IO9</span><span class="pin-role">TFT_SCLK — SPI Clock</span></li>
+          <li><span class="pin-num">3V3</span><span class="pin-role">VCC — Alimentación</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
+        </ul>
+        <a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank" rel="noopener">
+          ↗ Adafruit ST7735 Product Page
+        </a>
+      </div>
+
+      <!-- HMC5883L -->
+      <div class="card">
+        <div class="card-header">
+          <div class="color-swatch" style="background:#4CAF50"></div>
+          <span class="card-name">HMC5883L</span>
+        </div>
+        <div class="card-full-name">Honeywell HMC5883L — Magnetómetro digital 3 ejes (brújula)</div>
+        <span class="voltage-badge voltage-33">3.3 V</span>
+        <ul class="pin-list">
+          <li><span class="pin-num">IO6</span><span class="pin-role">SDA — I2C Data (addr 0x1E)</span></li>
+          <li><span class="pin-num">IO7</span><span class="pin-role">SCL — I2C Clock</span></li>
+          <li><span class="pin-num">3V3</span><span class="pin-role">VCC — Alimentación</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
+        </ul>
+        <a class="datasheet-link" href="https://cdn-shop.adafruit.com/datasheets/HMC5883L_3-Axis_Digital_Compass_IC.pdf" target="_blank" rel="noopener">
+          ↗ HMC5883L Datasheet (Honeywell)
+        </a>
+      </div>
+
+      <!-- LSM303 Accel -->
+      <div class="card">
+        <div class="card-header">
+          <div class="color-swatch" style="background:#2196F3"></div>
+          <span class="card-name">LSM303 Accel</span>
+        </div>
+        <div class="card-full-name">ST LSM303DLHC — Acelerómetro 3 ejes (corrección de inclinación)</div>
+        <span class="voltage-badge voltage-33">3.3 V</span>
+        <ul class="pin-list">
+          <li><span class="pin-num">IO6</span><span class="pin-role">SDA — I2C Data (addr 0x19)</span></li>
+          <li><span class="pin-num">IO7</span><span class="pin-role">SCL — I2C Clock</span></li>
+          <li><span class="pin-num">3V3</span><span class="pin-role">VCC — Alimentación</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
+        </ul>
+        <a class="datasheet-link" href="https://www.st.com/resource/en/datasheet/lsm303dlhc.pdf" target="_blank" rel="noopener">
+          ↗ LSM303DLHC Datasheet (ST)
+        </a>
+      </div>
+
+      <!-- Power Rail -->
+      <div class="card">
+        <div class="card-header">
+          <div class="color-swatch" style="background:#F44336"></div>
+          <span class="card-name">Power Rail</span>
+        </div>
+        <div class="card-full-name">ESP32-C3 DevKitC-02 — 3.3 V regulado (onboard LDO)</div>
+        <span class="voltage-badge voltage-33">3.3 V</span>
+        <ul class="pin-list">
+          <li><span class="pin-num">3V3</span><span class="pin-role">→ TFT, HMC5883L, LSM303</span></li>
+          <li><span class="pin-num">5V</span><span class="pin-role">USB-C input (no conectado a periféricos)</span></li>
+        </ul>
+      </div>
+
+      <!-- GND -->
+      <div class="card">
+        <div class="card-header">
+          <div class="color-swatch" style="background:#8B949E"></div>
+          <span class="card-name">GND</span>
+        </div>
+        <div class="card-full-name">Tierra común — todos los componentes comparten GND</div>
+        <ul class="pin-list">
+          <li><span class="pin-num">GND</span><span class="pin-role">→ TFT, HMC5883L, LSM303</span></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- I2C Bus note -->
+    <div style="margin-top:8px; padding:12px 16px; background:#161B22; border:1px solid #30363D; border-left:3px solid #9C27B0; border-radius:6px; font-size:12px; color:#CE93D8;">
+      <strong>Bus I2C compartido:</strong> El HMC5883L (0x1E) y el LSM303 Accel (0x19) comparten los pines IO6 (SDA) y IO7 (SCL). <code>Wire.begin(6, 7)</code> inicializa el bus con pines personalizados del ESP32-C3.
+    </div>
+  </div>
+
+  <!-- ════════════════ CONNECTION TABLE ════════════════ -->
+  <div class="table-section">
+    <h2>Tabla de conexiones</h2>
+    <table id="connTable">
+      <thead>
+        <tr>
+          <th onclick="sortTable(0)">Pin ESP32</th>
+          <th onclick="sortTable(1)">Señal / Rol</th>
+          <th onclick="sortTable(2)">Componente</th>
+          <th onclick="sortTable(3)">Voltaje</th>
+          <th onclick="sortTable(4)">Notas</th>
+          <th>Datasheet</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-tint-tft">
+          <td class="td-pin">IO0</td>
+          <td>TFT_RST</td>
+          <td class="td-component" style="color:#FF9800">ST7735 TFT</td>
+          <td>3.3 V</td>
+          <td class="td-note">Reset de pantalla, activo en LOW</td>
+          <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit</a></td>
+        </tr>
+        <tr class="row-tint-tft">
+          <td class="td-pin">IO1</td>
+          <td>TFT_DC</td>
+          <td class="td-component" style="color:#FF9800">ST7735 TFT</td>
+          <td>3.3 V</td>
+          <td class="td-note">Data / Command select</td>
+          <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit</a></td>
+        </tr>
+        <tr class="row-tint-tft">
+          <td class="td-pin">IO2</td>
+          <td>TFT_CS</td>
+          <td class="td-component" style="color:#FF9800">ST7735 TFT</td>
+          <td>3.3 V</td>
+          <td class="td-note">SPI Chip Select</td>
+          <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit</a></td>
+        </tr>
+        <tr class="row-tint-mag" style="border-left: 2px solid #9C27B0">
+          <td class="td-pin">IO6</td>
+          <td>SDA <span class="shared-badge">I2C BUS</span></td>
+          <td class="td-component">
+            <span style="color:#4CAF50">HMC5883L</span> + <span style="color:#2196F3">LSM303</span>
+          </td>
+          <td>3.3 V</td>
+          <td class="td-note">I2C Data — bus compartido (0x1E, 0x19)</td>
+          <td><a class="datasheet-link" href="https://cdn-shop.adafruit.com/datasheets/HMC5883L_3-Axis_Digital_Compass_IC.pdf" target="_blank">↗ HMC5883L</a></td>
+        </tr>
+        <tr class="row-tint-accel" style="border-left: 2px solid #9C27B0">
+          <td class="td-pin">IO7</td>
+          <td>SCL <span class="shared-badge">I2C BUS</span></td>
+          <td class="td-component">
+            <span style="color:#4CAF50">HMC5883L</span> + <span style="color:#2196F3">LSM303</span>
+          </td>
+          <td>3.3 V</td>
+          <td class="td-note">I2C Clock — bus compartido</td>
+          <td><a class="datasheet-link" href="https://www.st.com/resource/en/datasheet/lsm303dlhc.pdf" target="_blank">↗ LSM303</a></td>
+        </tr>
+        <tr class="row-tint-tft">
+          <td class="td-pin">IO8</td>
+          <td>TFT_MOSI / SPI_MOSI</td>
+          <td class="td-component" style="color:#FF9800">ST7735 TFT</td>
+          <td>3.3 V</td>
+          <td class="td-note">SPI Data out · <code>SPI.begin(9,-1,8)</code></td>
+          <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit</a></td>
+        </tr>
+        <tr class="row-tint-tft">
+          <td class="td-pin">IO9</td>
+          <td>TFT_SCLK / SPI_CLK</td>
+          <td class="td-component" style="color:#FF9800">ST7735 TFT</td>
+          <td>3.3 V</td>
+          <td class="td-note">SPI Clock · 27 MHz configurado</td>
+          <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit</a></td>
+        </tr>
+        <tr class="row-tint-power">
+          <td class="td-pin">3V3</td>
+          <td>VCC Power</td>
+          <td class="td-component" style="color:#F44336">Power Rail</td>
+          <td>3.3 V</td>
+          <td class="td-note">→ TFT VCC, HMC5883L VCC, LSM303 VCC</td>
+          <td>—</td>
+        </tr>
+        <tr class="row-tint-gnd">
+          <td class="td-pin">GND</td>
+          <td>Ground</td>
+          <td class="td-component" style="color:#8B949E">GND Rail</td>
+          <td>—</td>
+          <td class="td-note">→ TFT GND, HMC5883L GND, LSM303 GND</td>
+          <td>—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>Generado por Claude &nbsp;·&nbsp; arduino-pin-diagram skill &nbsp;·&nbsp; Proyecto: Brujula / ESP32-C3-DevKitC-02</footer>
+
+</div><!-- .main-layout -->
+
+<script>
+  // ── Table sorting ──
+  let sortDir = {};
+  function sortTable(col) {
+    const table = document.getElementById('connTable');
+    const tbody = table.querySelector('tbody');
+    const rows  = Array.from(tbody.querySelectorAll('tr'));
+    const ths   = table.querySelectorAll('thead th');
+    sortDir[col] = sortDir[col] === 'asc' ? 'desc' : 'asc';
+    ths.forEach((th, i) => { th.classList.remove('asc','desc'); });
+    ths[col].classList.add(sortDir[col]);
+    rows.sort((a, b) => {
+      const aT = a.cells[col]?.textContent.trim() || '';
+      const bT = b.cells[col]?.textContent.trim() || '';
+      const aNum = parseFloat(aT.replace(/[^\d.]/g,''));
+      const bNum = parseFloat(bT.replace(/[^\d.]/g,''));
+      let cmp = isNaN(aNum) || isNaN(bNum) ? aT.localeCompare(bT) : aNum - bNum;
+      return sortDir[col] === 'desc' ? -cmp : cmp;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+  }
+
+  // ── Copy embed ──
+  function copyEmbed() {
+    const html = document.documentElement.outerHTML;
+    navigator.clipboard.writeText(html).then(() => {
+      const btn = document.querySelector('.copy-btn');
+      btn.textContent = '✅ Copiado!';
+      setTimeout(() => btn.textContent = '📋 Copiar HTML', 2000);
+    });
+  }
+</script>
+</body>
+</html>
