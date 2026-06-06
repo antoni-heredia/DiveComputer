@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DiveComputer – Diagrama de Pines</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0D1117; --surface: #161B22; --border: #30363D;
+      --text: #C9D1D9; --muted: #6E7681;
+      --c-tft: #FF9800; --c-sda: #4CAF50; --c-scl: #2196F3;
+      --c-power: #F44336; --c-gnd: #8B949E; --c-wifi: #E91E63;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.5; }
+
+    /* ── HEADER ── */
+    header { padding: 20px 32px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .header-left h1 { font-size: 21px; font-weight: 600; letter-spacing: -0.3px; }
+    .header-left p { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; transition: background 0.15s; }
+    .btn:hover { background: #21262D; }
+
+    /* ── TABS ── */
+    .board-tabs { display: flex; gap: 4px; padding: 16px 32px 0; border-bottom: 1px solid var(--border); }
+    .board-tab { padding: 8px 20px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 13px; font-weight: 500; border: 1px solid transparent; border-bottom: none; background: transparent; color: var(--muted); font-family: inherit; transition: all 0.15s; }
+    .board-tab.active { background: var(--surface); border-color: var(--border); color: var(--text); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── MAIN GRID ── */
+    .main { display: grid; grid-template-columns: minmax(280px, 320px) 1fr; gap: 24px; padding: 24px 32px; align-items: start; }
+    @media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+
+    /* ── BOARD PANEL ── */
+    .board-panel { position: sticky; top: 24px; }
+    .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 10px; }
+    .board-svg-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; justify-content: center; }
+
+    /* ── COMPONENT CARDS ── */
+    .cards-panel { display: flex; flex-direction: column; gap: 10px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid transparent; border-radius: 10px; padding: 14px 16px; }
+    .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .card-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+    .card-name { font-weight: 600; font-size: 14px; }
+    .card-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+    .vbadge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; margin-bottom: 9px; font-family: 'JetBrains Mono', monospace; }
+    .pins-list { list-style: none; font-size: 11px; margin-bottom: 9px; }
+    .pins-list li { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid #21262D; }
+    .pins-list li:last-child { border-bottom: none; }
+    .pin-num { font-family: 'JetBrains Mono', monospace; font-weight: 700; min-width: 62px; }
+    .pin-role { color: var(--muted); }
+    .ds-link { font-size: 11px; color: #58A6FF; text-decoration: none; }
+    .ds-link:hover { text-decoration: underline; }
+
+    /* ── TABLE ── */
+    .table-section { padding: 0 32px 32px; }
+    .conn-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .conn-table thead th { text-align: left; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 700; }
+    .conn-table tbody td { padding: 8px 12px; border: 1px solid var(--border); }
+    .conn-table tbody td:first-child { font-family: 'JetBrains Mono', monospace; }
+    .conn-table tbody tr:hover { filter: brightness(1.18); }
+    .pbadge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+    footer { text-align: center; padding: 18px; color: var(--muted); font-size: 11px; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>🧭 DiveComputer – Diagrama de Pines</h1>
+    <p>ESP32-C3-DevKitC-02 · ESP32-S3-DevKitC-1 · ST7735 · HMC5883L · LSM303 · WiFi AP · 2026-06-06</p>
+  </div>
+  <button class="btn" onclick="copyHTML(event)">📋 Copiar HTML</button>
+</header>
+
+<div class="board-tabs">
+  <button class="board-tab active" onclick="switchTab('c3', this)">ESP32-C3-DevKitC-02</button>
+  <button class="board-tab" onclick="switchTab('s3', this)">ESP32-S3-DevKitC-1</button>
+</div>
+
+<!-- ═══════════════ ESP32-C3 TAB ═══════════════ -->
+<div id="tab-c3" class="tab-content active">
+  <div class="main">
+
+    <!-- Board SVG -->
+    <div class="board-panel">
+      <div class="section-label">Placa — ESP32-C3-DevKitC-02</div>
+      <div class="board-svg-wrap">
+        <svg viewBox="0 0 280 370" width="280" height="370" xmlns="http://www.w3.org/2000/svg">
+          <!-- PCB outline -->
+          <rect x="50" y="10" width="180" height="345" rx="8" fill="#1C2B3A" stroke="#2D4A6A" stroke-width="2"/>
+          <!-- Antenna area -->
+          <rect x="80" y="13" width="120" height="22" rx="3" fill="#142030" stroke="#2D4A6A" stroke-width="1"/>
+          <text x="140" y="28" text-anchor="middle" fill="#3D6080" font-size="8" font-family="Inter,sans-serif">WiFi Antenna</text>
+          <!-- Chip -->
+          <rect x="90" y="140" width="100" height="90" rx="4" fill="#0A1520" stroke="#2D4060" stroke-width="1.5"/>
+          <text x="140" y="182" text-anchor="middle" fill="#2D4060" font-size="9" font-family="JetBrains Mono,monospace" font-weight="600">ESP32-C3</text>
+          <text x="140" y="195" text-anchor="middle" fill="#2D4060" font-size="7" font-family="Inter,sans-serif">DevKitC-02</text>
+          <!-- USB-C -->
+          <rect x="116" y="342" width="48" height="10" rx="4" fill="#2D4060" stroke="#4A6080" stroke-width="1.5"/>
+          <text x="140" y="350" text-anchor="middle" fill="#8B9BAB" font-size="7" font-family="Inter,sans-serif">USB-C</text>
+
+          <!-- ── LEFT PINS (J1): 3V3 GND IO4 IO5 IO6 IO7 IO8 IO9 IO10 EN ── -->
+          <!-- 3V3 -->
+          <circle cx="44" cy="58"  r="8" fill="#F44336" stroke="#FF6659" stroke-width="1.5"/>
+          <text x="32" y="61"  text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace">3V3</text>
+          <!-- GND -->
+          <circle cx="44" cy="82"  r="8" fill="#8B949E" stroke="#9EA7B0" stroke-width="1.5"/>
+          <text x="32" y="85"  text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace">GND</text>
+          <!-- IO4 unused -->
+          <circle cx="44" cy="106" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="32" y="109" text-anchor="end" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO4</text>
+          <!-- IO5 unused -->
+          <circle cx="44" cy="130" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="32" y="133" text-anchor="end" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO5</text>
+          <!-- IO6 SDA -->
+          <circle cx="44" cy="154" r="8" fill="#4CAF50" stroke="#66BB6A" stroke-width="2"/>
+          <text x="32" y="157" text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO6</text>
+          <text x="32" y="168" text-anchor="end" fill="#4CAF50" font-size="7" font-family="Inter,sans-serif">SDA</text>
+          <line x1="52" y1="154" x2="90" y2="175" stroke="#4CAF50" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>
+          <!-- IO7 SCL -->
+          <circle cx="44" cy="178" r="8" fill="#2196F3" stroke="#42A5F5" stroke-width="2"/>
+          <text x="32" y="181" text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO7</text>
+          <text x="32" y="192" text-anchor="end" fill="#2196F3" font-size="7" font-family="Inter,sans-serif">SCL</text>
+          <line x1="52" y1="178" x2="90" y2="185" stroke="#2196F3" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>
+          <!-- IO8 MOSI -->
+          <circle cx="44" cy="202" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="32" y="205" text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO8</text>
+          <text x="32" y="216" text-anchor="end" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">MOSI</text>
+          <line x1="52" y1="202" x2="90" y2="195" stroke="#FF9800" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>
+          <!-- IO9 SCLK -->
+          <circle cx="44" cy="226" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="32" y="229" text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO9</text>
+          <text x="32" y="240" text-anchor="end" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">SCLK</text>
+          <line x1="52" y1="226" x2="90" y2="205" stroke="#FF9800" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>
+          <!-- IO10 unused -->
+          <circle cx="44" cy="250" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="32" y="253" text-anchor="end" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO10</text>
+          <!-- EN -->
+          <circle cx="44" cy="274" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="32" y="277" text-anchor="end" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">EN</text>
+
+          <!-- ── RIGHT PINS (J3): GND 5V IO0 IO1 IO2 IO3 IO18 IO19 ── -->
+          <!-- GND right -->
+          <circle cx="236" cy="58"  r="8" fill="#8B949E" stroke="#9EA7B0" stroke-width="1.5"/>
+          <text x="248" y="61"  text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace">GND</text>
+          <!-- 5V right -->
+          <circle cx="236" cy="82"  r="8" fill="#F44336" stroke="#FF6659" stroke-width="1.5"/>
+          <text x="248" y="85"  text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace">5V</text>
+          <!-- IO0 RST -->
+          <circle cx="236" cy="106" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="248" y="109" text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO0</text>
+          <text x="248" y="120" text-anchor="start" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">RST</text>
+          <line x1="228" y1="106" x2="190" y2="155" stroke="#FF9800" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>
+          <!-- IO1 DC -->
+          <circle cx="236" cy="130" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="248" y="133" text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO1</text>
+          <text x="248" y="144" text-anchor="start" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">DC</text>
+          <line x1="228" y1="130" x2="190" y2="165" stroke="#FF9800" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>
+          <!-- IO2 CS -->
+          <circle cx="236" cy="154" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="248" y="157" text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO2</text>
+          <text x="248" y="168" text-anchor="start" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">CS</text>
+          <line x1="228" y1="154" x2="190" y2="175" stroke="#FF9800" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>
+          <!-- IO3 unused -->
+          <circle cx="236" cy="178" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="248" y="181" text-anchor="start" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO3</text>
+          <!-- IO18 unused -->
+          <circle cx="236" cy="202" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="248" y="205" text-anchor="start" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO18</text>
+          <!-- IO19 unused -->
+          <circle cx="236" cy="226" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="248" y="229" text-anchor="start" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO19</text>
+
+          <!-- Legend -->
+          <rect x="62" y="288" width="156" height="46" rx="4" fill="#0D1520" stroke="#2D4060" stroke-width="1"/>
+          <text x="140" y="300" text-anchor="middle" fill="#6E7681" font-size="7" font-family="Inter,sans-serif" font-weight="700" letter-spacing="1">LEYENDA</text>
+          <circle cx="74"  cy="312" r="5" fill="#FF9800"/>
+          <text x="82"  y="315" fill="#C9D1D9" font-size="8" font-family="Inter,sans-serif">SPI / TFT</text>
+          <circle cx="74"  cy="326" r="5" fill="#4CAF50"/>
+          <text x="82"  y="329" fill="#C9D1D9" font-size="8" font-family="Inter,sans-serif">I²C SDA</text>
+          <circle cx="152" cy="312" r="5" fill="#2196F3"/>
+          <text x="160" cy="315" y="315" fill="#C9D1D9" font-size="8" font-family="Inter,sans-serif">I²C SCL</text>
+          <circle cx="152" cy="326" r="5" fill="#F44336"/>
+          <text x="160" cy="329" y="329" fill="#C9D1D9" font-size="8" font-family="Inter,sans-serif">Power</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Component cards -->
+    <div class="cards-panel">
+      <div class="section-label">Componentes</div>
+
+      <div class="card" style="border-left-color:#FF9800;">
+        <div class="card-header">
+          <div class="card-dot" style="background:#FF9800;"></div>
+          <div class="card-name">ST7735 TFT Display</div>
+        </div>
+        <div class="card-desc">1.8" TFT LCD 128×160 px · Controlador ST7735R (INITR_BLACKTAB) · SPI 27 MHz</div>
+        <span class="vbadge" style="background:#FF980020;color:#FF9800;border:1px solid #FF980055;">3.3 V</span>
+        <ul class="pins-list">
+          <li><span class="pin-num">GPIO 0</span><span class="pin-role">RST — Reset activo bajo</span></li>
+          <li><span class="pin-num">GPIO 1</span><span class="pin-role">DC — Data/Command select</span></li>
+          <li><span class="pin-num">GPIO 2</span><span class="pin-role">CS — Chip Select</span></li>
+          <li><span class="pin-num">GPIO 8</span><span class="pin-role">MOSI — SPI Data Out</span></li>
+          <li><span class="pin-num">GPIO 9</span><span class="pin-role">SCLK — SPI Clock</span></li>
+          <li><span class="pin-num">3.3V</span><span class="pin-role">VCC</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
+        </ul>
+        <a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">↗ Datasheet ST7735 (Sitronix)</a>
+      </div>
+
+      <div class="card" style="border-left-color:#4CAF50;">
+        <div class="card-header">
+          <div class="card-dot" style="background:#4CAF50;"></div>
+          <div class="card-name">HMC5883L Magnetómetro</div>
+        </div>
+        <div class="card-desc">Honeywell HMC5883L · Brújula digital 3 ejes · I²C dirección 0x1E</div>
+        <span class="vbadge" style="background:#4CAF5020;color:#4CAF50;border:1px solid #4CAF5055;">2.16–3.6 V</span>
+        <ul class="pins-list">
+          <li><span class="pin-num">GPIO 6</span><span class="pin-role">SDA — I²C Data (bus compartido)</span></li>
+          <li><span class="pin-num">GPIO 7</span><span class="pin-role">SCL — I²C Clock (bus compartido)</span></li>
+          <li><span class="pin-num">3.3V</span><span class="pin-role">VCC</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
+        </ul>
+        <a class="ds-link" href="https://www.farnell.com/datasheets/1683374.pdf" target="_blank">↗ Datasheet HMC5883L (Honeywell / Farnell)</a>
+      </div>
+
+      <div class="card" style="border-left-color:#2196F3;">
+        <div class="card-header">
+          <div class="card-dot" style="background:#2196F3;"></div>
+          <div class="card-name">LSM303DLHC Acelerómetro</div>
+        </div>
+        <div class="card-desc">STMicroelectronics LSM303DLHC · Acelerómetro 3 ejes · I²C dirección 0x18 (SA0=GND)</div>
+        <span class="vbadge" style="background:#2196F320;color:#2196F3;border:1px solid #2196F355;">2.16–3.6 V</span>
+        <ul class="pins-list">
+          <li><span class="pin-num">GPIO 6</span><span class="pin-role">SDA — I²C Data (bus compartido)</span></li>
+          <li><span class="pin-num">GPIO 7</span><span class="pin-role">SCL — I²C Clock (bus compartido)</span></li>
+          <li><span class="pin-num">3.3V</span><span class="pin-role">VCC</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
+        </ul>
+        <a class="ds-link" href="https://www.st.com/resource/en/datasheet/lsm303dlhc.pdf" target="_blank">↗ Datasheet LSM303DLHC (STMicroelectronics)</a>
+      </div>
+
+      <div class="card" style="border-left-color:#E91E63;">
+        <div class="card-header">
+          <div class="card-dot" style="background:#E91E63;"></div>
+          <div class="card-name">WiFi — Portal de Calibración</div>
+        </div>
+        <div class="card-desc">Radio interna ESP32-C3 · Modo AP · SSID: "Brujula-Calib" · HTTP en 192.168.4.1</div>
+        <span class="vbadge" style="background:#E91E6320;color:#E91E63;border:1px solid #E91E6355;">Interno</span>
+        <ul class="pins-list">
+          <li><span class="pin-num">—</span><span class="pin-role">Sin pines externos · radio integrada</span></li>
+        </ul>
+        <p style="font-size:11px;color:var(--muted);">Interfaz web para calibración hard-iron + soft-iron del magnetómetro. Guardar en flash mediante Preferences.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connection table C3 -->
+  <div class="table-section">
+    <div class="section-label" style="padding-bottom:10px;">Tabla de Conexiones — ESP32-C3-DevKitC-02</div>
+    <table class="conn-table">
+      <thead>
+        <tr><th>GPIO</th><th>Señal / Rol</th><th>Componente</th><th>Bus</th><th>Tensión</th><th>Notas</th><th>Datasheet</th></tr>
+      </thead>
+      <tbody>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">0</span></td><td>RST</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>Reset activo bajo</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">1</span></td><td>DC</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>Data / Command select</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">2</span></td><td>CS</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>Chip Select activo bajo</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#4CAF5010;"><td><span class="pbadge" style="background:#4CAF5030;color:#4CAF50;">6</span></td><td>SDA</td><td>HMC5883L + LSM303</td><td>I²C</td><td>3.3 V</td><td>Bus compartido · Wire.begin(6,7)</td><td><a class="ds-link" href="https://www.farnell.com/datasheets/1683374.pdf" target="_blank">HMC5883L↗</a></td></tr>
+        <tr style="background:#4CAF5010;"><td><span class="pbadge" style="background:#4CAF5030;color:#4CAF50;">7</span></td><td>SCL</td><td>HMC5883L + LSM303</td><td>I²C</td><td>3.3 V</td><td>Bus compartido · Wire.begin(6,7)</td><td><a class="ds-link" href="https://www.st.com/resource/en/datasheet/lsm303dlhc.pdf" target="_blank">LSM303↗</a></td></tr>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">8</span></td><td>MOSI</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>SPI Data · SPI.begin(9,−1,8)</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">9</span></td><td>SCLK</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>SPI Clock 27 MHz · SPI.begin(9,−1,8)</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#F4433610;"><td><span class="pbadge" style="background:#F4433630;color:#F44336;">3V3</span></td><td>VCC</td><td>TFT · HMC5883L · LSM303</td><td>—</td><td>3.3 V</td><td>Alimentación todos los periféricos</td><td>—</td></tr>
+        <tr style="background:#8B949E10;"><td><span class="pbadge" style="background:#8B949E30;color:#8B949E;">GND</span></td><td>GND</td><td>TFT · HMC5883L · LSM303</td><td>—</td><td>0 V</td><td>Masa común</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════ ESP32-S3 TAB ═══════════════ -->
+<div id="tab-s3" class="tab-content">
+  <div class="main">
+
+    <div class="board-panel">
+      <div class="section-label">Placa — ESP32-S3-DevKitC-1</div>
+      <div class="board-svg-wrap">
+        <svg viewBox="0 0 300 400" width="280" height="373" xmlns="http://www.w3.org/2000/svg">
+          <rect x="50" y="10" width="200" height="380" rx="8" fill="#1C2B3A" stroke="#2D4A6A" stroke-width="2"/>
+          <rect x="80" y="13" width="140" height="22" rx="3" fill="#142030" stroke="#2D4A6A" stroke-width="1"/>
+          <text x="150" y="28" text-anchor="middle" fill="#3D6080" font-size="8" font-family="Inter,sans-serif">WiFi / BT Antenna</text>
+          <rect x="90" y="160" width="120" height="100" rx="4" fill="#0A1520" stroke="#2D4060" stroke-width="1.5"/>
+          <text x="150" y="205" text-anchor="middle" fill="#2D4060" font-size="9" font-family="JetBrains Mono,monospace" font-weight="600">ESP32-S3</text>
+          <text x="150" y="218" text-anchor="middle" fill="#2D4060" font-size="7" font-family="Inter,sans-serif">DevKitC-1</text>
+          <rect x="126" y="377" width="48" height="10" rx="4" fill="#2D4060" stroke="#4A6080" stroke-width="1.5"/>
+          <text x="150" y="385" text-anchor="middle" fill="#8B9BAB" font-size="7" font-family="Inter,sans-serif">USB-C</text>
+
+          <!-- LEFT: 3V3 GND IO1(SDA) IO2(SCL) IO3(MOSI) IO4(SCLK) -->
+          <circle cx="44" cy="58"  r="8" fill="#F44336" stroke="#FF6659" stroke-width="1.5"/>
+          <text x="32" y="61"  text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace">3V3</text>
+          <circle cx="44" cy="82"  r="8" fill="#8B949E" stroke="#9EA7B0" stroke-width="1.5"/>
+          <text x="32" y="85"  text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace">GND</text>
+          <!-- IO1 SDA -->
+          <circle cx="44" cy="106" r="8" fill="#4CAF50" stroke="#66BB6A" stroke-width="2"/>
+          <text x="32" y="109" text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO1</text>
+          <text x="32" y="120" text-anchor="end" fill="#4CAF50" font-size="7" font-family="Inter,sans-serif">SDA</text>
+          <!-- IO2 SCL -->
+          <circle cx="44" cy="134" r="8" fill="#2196F3" stroke="#42A5F5" stroke-width="2"/>
+          <text x="32" y="137" text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO2</text>
+          <text x="32" y="148" text-anchor="end" fill="#2196F3" font-size="7" font-family="Inter,sans-serif">SCL</text>
+          <!-- IO3 MOSI -->
+          <circle cx="44" cy="162" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="32" y="165" text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO3</text>
+          <text x="32" y="176" text-anchor="end" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">MOSI</text>
+          <!-- IO4 SCLK -->
+          <circle cx="44" cy="190" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="32" y="193" text-anchor="end" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO4</text>
+          <text x="32" y="204" text-anchor="end" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">SCLK</text>
+          <!-- unused -->
+          <circle cx="44" cy="218" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="32" y="221" text-anchor="end" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO5</text>
+          <circle cx="44" cy="242" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="32" y="245" text-anchor="end" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO6</text>
+
+          <!-- RIGHT: GND 5V IO9(RST) IO10(DC) IO11(CS) -->
+          <circle cx="256" cy="58"  r="8" fill="#8B949E" stroke="#9EA7B0" stroke-width="1.5"/>
+          <text x="268" y="61"  text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace">GND</text>
+          <circle cx="256" cy="82"  r="8" fill="#F44336" stroke="#FF6659" stroke-width="1.5"/>
+          <text x="268" y="85"  text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace">5V</text>
+          <!-- IO9 RST -->
+          <circle cx="256" cy="106" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="268" y="109" text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO9</text>
+          <text x="268" y="120" text-anchor="start" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">RST</text>
+          <!-- IO10 DC -->
+          <circle cx="256" cy="134" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="268" y="137" text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO10</text>
+          <text x="268" y="148" text-anchor="start" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">DC</text>
+          <!-- IO11 CS -->
+          <circle cx="256" cy="162" r="8" fill="#FF9800" stroke="#FFA726" stroke-width="2"/>
+          <text x="268" y="165" text-anchor="start" fill="#C9D1D9" font-size="8" font-family="JetBrains Mono,monospace" font-weight="600">IO11</text>
+          <text x="268" y="176" text-anchor="start" fill="#FF9800" font-size="7" font-family="Inter,sans-serif">CS</text>
+          <!-- unused -->
+          <circle cx="256" cy="190" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="268" y="193" text-anchor="start" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO12</text>
+          <circle cx="256" cy="214" r="8" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+          <text x="268" y="217" text-anchor="start" fill="#6E7681" font-size="8" font-family="JetBrains Mono,monospace">IO13</text>
+
+          <!-- Legend -->
+          <rect x="72" y="318" width="156" height="46" rx="4" fill="#0D1520" stroke="#2D4060" stroke-width="1"/>
+          <text x="150" y="330" text-anchor="middle" fill="#6E7681" font-size="7" font-family="Inter,sans-serif" font-weight="700" letter-spacing="1">LEYENDA</text>
+          <circle cx="84"  cy="342" r="5" fill="#FF9800"/>
+          <text x="92"  y="345" fill="#C9D1D9" font-size="8" font-family="Inter,sans-serif">SPI / TFT</text>
+          <circle cx="84"  cy="356" r="5" fill="#4CAF50"/>
+          <text x="92"  y="359" fill="#C9D1D9" font-size="8" font-family="Inter,sans-serif">I²C SDA</text>
+          <circle cx="162" cy="342" r="5" fill="#2196F3"/>
+          <text x="170" y="345" fill="#C9D1D9" font-size="8" font-family="Inter,sans-serif">I²C SCL</text>
+          <circle cx="162" cy="356" r="5" fill="#F44336"/>
+          <text x="170" y="359" fill="#C9D1D9" font-size="8" font-family="Inter,sans-serif">Power</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="cards-panel">
+      <div class="section-label">Componentes — ESP32-S3</div>
+
+      <div class="card" style="border-left-color:#FF9800;">
+        <div class="card-header">
+          <div class="card-dot" style="background:#FF9800;"></div>
+          <div class="card-name">ST7735 TFT Display</div>
+        </div>
+        <div class="card-desc">1.8" TFT LCD 128×160 px · Controlador ST7735R · SPI 27 MHz</div>
+        <span class="vbadge" style="background:#FF980020;color:#FF9800;border:1px solid #FF980055;">3.3 V</span>
+        <ul class="pins-list">
+          <li><span class="pin-num">GPIO 9</span><span class="pin-role">RST — Reset activo bajo</span></li>
+          <li><span class="pin-num">GPIO 10</span><span class="pin-role">DC — Data/Command select</span></li>
+          <li><span class="pin-num">GPIO 11</span><span class="pin-role">CS — Chip Select</span></li>
+          <li><span class="pin-num">GPIO 3</span><span class="pin-role">MOSI — SPI Data Out</span></li>
+          <li><span class="pin-num">GPIO 4</span><span class="pin-role">SCLK — SPI Clock</span></li>
+          <li><span class="pin-num">3.3V</span><span class="pin-role">VCC</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
+        </ul>
+        <a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">↗ Datasheet ST7735</a>
+      </div>
+
+      <div class="card" style="border-left-color:#4CAF50;">
+        <div class="card-header">
+          <div class="card-dot" style="background:#4CAF50;"></div>
+          <div class="card-name">HMC5883L Magnetómetro</div>
+        </div>
+        <div class="card-desc">Honeywell HMC5883L · Brújula 3 ejes · I²C 0x1E</div>
+        <span class="vbadge" style="background:#4CAF5020;color:#4CAF50;border:1px solid #4CAF5055;">2.16–3.6 V</span>
+        <ul class="pins-list">
+          <li><span class="pin-num">GPIO 1</span><span class="pin-role">SDA — I²C Data</span></li>
+          <li><span class="pin-num">GPIO 2</span><span class="pin-role">SCL — I²C Clock</span></li>
+          <li><span class="pin-num">3.3V / GND</span><span class="pin-role">Alimentación</span></li>
+        </ul>
+        <a class="ds-link" href="https://www.farnell.com/datasheets/1683374.pdf" target="_blank">↗ Datasheet HMC5883L</a>
+      </div>
+
+      <div class="card" style="border-left-color:#2196F3;">
+        <div class="card-header">
+          <div class="card-dot" style="background:#2196F3;"></div>
+          <div class="card-name">LSM303DLHC Acelerómetro</div>
+        </div>
+        <div class="card-desc">STMicroelectronics LSM303DLHC · Acelerómetro 3 ejes · I²C 0x18</div>
+        <span class="vbadge" style="background:#2196F320;color:#2196F3;border:1px solid #2196F355;">2.16–3.6 V</span>
+        <ul class="pins-list">
+          <li><span class="pin-num">GPIO 1</span><span class="pin-role">SDA — I²C Data</span></li>
+          <li><span class="pin-num">GPIO 2</span><span class="pin-role">SCL — I²C Clock</span></li>
+          <li><span class="pin-num">3.3V / GND</span><span class="pin-role">Alimentación</span></li>
+        </ul>
+        <a class="ds-link" href="https://www.st.com/resource/en/datasheet/lsm303dlhc.pdf" target="_blank">↗ Datasheet LSM303DLHC</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <div class="section-label" style="padding-bottom:10px;">Tabla de Conexiones — ESP32-S3-DevKitC-1</div>
+    <table class="conn-table">
+      <thead>
+        <tr><th>GPIO</th><th>Señal / Rol</th><th>Componente</th><th>Bus</th><th>Tensión</th><th>Notas</th><th>Datasheet</th></tr>
+      </thead>
+      <tbody>
+        <tr style="background:#4CAF5010;"><td><span class="pbadge" style="background:#4CAF5030;color:#4CAF50;">1</span></td><td>SDA</td><td>HMC5883L + LSM303</td><td>I²C</td><td>3.3 V</td><td>Bus compartido</td><td><a class="ds-link" href="https://www.farnell.com/datasheets/1683374.pdf" target="_blank">HMC5883L↗</a></td></tr>
+        <tr style="background:#4CAF5010;"><td><span class="pbadge" style="background:#4CAF5030;color:#4CAF50;">2</span></td><td>SCL</td><td>HMC5883L + LSM303</td><td>I²C</td><td>3.3 V</td><td>Bus compartido</td><td><a class="ds-link" href="https://www.st.com/resource/en/datasheet/lsm303dlhc.pdf" target="_blank">LSM303↗</a></td></tr>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">3</span></td><td>MOSI</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>SPI Data 27 MHz</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">4</span></td><td>SCLK</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>SPI Clock 27 MHz</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">9</span></td><td>RST</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>Reset activo bajo</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">10</span></td><td>DC</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>Data/Command select</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#FF980010;"><td><span class="pbadge" style="background:#FF980030;color:#FF9800;">11</span></td><td>CS</td><td>ST7735 TFT</td><td>SPI</td><td>3.3 V</td><td>Chip Select activo bajo</td><td><a class="ds-link" href="https://www.displayfuture.com/Display/datasheet/controller/ST7735.pdf" target="_blank">ST7735↗</a></td></tr>
+        <tr style="background:#F4433610;"><td><span class="pbadge" style="background:#F4433630;color:#F44336;">3V3</span></td><td>VCC</td><td>TFT · HMC5883L · LSM303</td><td>—</td><td>3.3 V</td><td>Alimentación</td><td>—</td></tr>
+        <tr style="background:#8B949E10;"><td><span class="pbadge" style="background:#8B949E30;color:#8B949E;">GND</span></td><td>GND</td><td>TFT · HMC5883L · LSM303</td><td>—</td><td>0 V</td><td>Masa común</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<footer>
+  Generado por Claude · arduino-pin-diagram skill · DiveComputer ESP32-C3/S3 · 2026-06-06
+</footer>
+
+<script>
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.board-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+function copyHTML(e) {
+  navigator.clipboard.writeText(document.documentElement.outerHTML).then(() => {
+    e.target.textContent = '✓ Copiado!';
+    setTimeout(() => e.target.textContent = '📋 Copiar HTML', 2000);
+  });
+}
+</script>
+</body>
+</html>

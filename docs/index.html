@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DiveComputer – Documentación</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0D1117; color: #C9D1D9; font-family: 'Inter', sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; }
+    .hero { text-align: center; margin-bottom: 40px; }
+    .hero h1 { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 8px; }
+    .hero p { color: #6E7681; font-size: 15px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; width: 100%; max-width: 800px; }
+    .card { background: #161B22; border: 1px solid #30363D; border-radius: 12px; padding: 24px; text-decoration: none; color: inherit; transition: border-color 0.15s, transform 0.15s; display: flex; flex-direction: column; gap: 8px; }
+    .card:hover { border-color: #58A6FF; transform: translateY(-2px); }
+    .card-icon { font-size: 28px; }
+    .card-title { font-weight: 600; font-size: 16px; }
+    .card-desc { font-size: 13px; color: #6E7681; line-height: 1.5; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; background: #21262D; color: #8B949E; margin-top: 4px; }
+    footer { margin-top: 40px; color: #6E7681; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h1>🧭 DiveComputer</h1>
+    <p>ESP32-C3/S3 · Brújula compensada por inclinación · Display TFT · Portal WiFi de calibración</p>
+  </div>
+
+  <div class="cards">
+    <a class="card" href="pin-diagram.html">
+      <div class="card-icon">🔌</div>
+      <div class="card-title">Diagrama de Pines</div>
+      <div class="card-desc">Conexiones entre el ESP32 y los periféricos: ST7735 TFT, HMC5883L magnetómetro, LSM303 acelerómetro.</div>
+      <span class="tag">ESP32-C3 · ESP32-S3</span>
+    </a>
+
+    <a class="card" href="https://github.com/antoni-heredia/DiveComputer" target="_blank">
+      <div class="card-icon">💻</div>
+      <div class="card-title">Código fuente</div>
+      <div class="card-desc">Repositorio en GitHub con el firmware PlatformIO completo, incluyendo el portal de calibración WiFi.</div>
+      <span class="tag">PlatformIO · Arduino</span>
+    </a>
+
+    <a class="card" href="README.md">
+      <div class="card-icon">📄</div>
+      <div class="card-title">Documentación</div>
+      <div class="card-desc">Notas de hardware, fotografías del montaje y diagrama de pines de la placa de desarrollo.</div>
+      <span class="tag">Hardware · Setup</span>
+    </a>
+  </div>
+
+  <footer>DiveComputer · Antoni Heredia · 2026</footer>
+</body>
+</html>
