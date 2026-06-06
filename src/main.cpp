@@ -11,7 +11,78 @@
 #include <Adafruit_LSM303_Accel.h>
 #include <SD.h>
 #include <DNSServer.h>
+#include <Adafruit_NeoPixel.h>
 #include "deco.h"
+
+// LED RGB integrado — GPIO 48 solo disponible en S3; C3 lo omite (GPIO 8 colisiona con TFT MOSI)
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+  #define HAS_RGB_LED 1
+  #define RGB_LED_PIN 48
+#else
+  #define HAS_RGB_LED 0
+#endif
+
+#if HAS_RGB_LED
+static Adafruit_NeoPixel rgbLed(1, RGB_LED_PIN, NEO_GRB + NEO_KHZ800);
+
+// Estado para detección de bajada a velocidad constante
+static float         s_ledDepthPrev  = 0.0f;
+static float         s_ledVelPrev    = 0.0f;
+static unsigned long s_ledSampleMs   = 0;
+static bool          s_ledVelReady   = false;
+static bool          s_constDescent  = false;
+
+static void setupRGBLed(void) {
+  rgbLed.begin();
+  rgbLed.setBrightness(80);
+  rgbLed.clear();
+  rgbLed.show();
+}
+
+// Actualiza el LED RGB según profundidad y tasa de bajada.
+// Prioridad 1: depth >= 30 m  → rojo fijo
+// Prioridad 2: bajada constante → verde parpadeante (500 ms)
+// Resto: apagado
+static void updateRGBLed(float depth) {
+  unsigned long now = millis();
+
+  // Muestreo cada 2 s para estimar velocidad (m/s, positivo = bajando)
+  if (now - s_ledSampleMs >= 2000UL) {
+    float dt  = (now - s_ledSampleMs) / 1000.0f;
+    float vel = (depth - s_ledDepthPrev) / dt;
+
+    if (s_ledVelReady) {
+      // Constante = ambas velocidades > 0.05 m/s y la variación < 40 % de la media
+      float avg   = (fabsf(vel) + fabsf(s_ledVelPrev)) * 0.5f;
+      bool  desc   = vel > 0.05f;
+      bool  stable = desc && (fabsf(vel - s_ledVelPrev) < avg * 0.4f + 0.03f);
+      s_constDescent = stable;
+    } else {
+      s_ledVelReady = true;
+    }
+
+    s_ledVelPrev   = vel;
+    s_ledDepthPrev = depth;
+    s_ledSampleMs  = now;
+  }
+
+  if (depth >= 30.0f) {
+    rgbLed.setPixelColor(0, rgbLed.Color(255, 0, 0));
+    rgbLed.show();
+    return;
+  }
+
+  if (s_constDescent) {
+    bool on = (now / 500UL) % 2 == 0;
+    rgbLed.setPixelColor(0, on ? rgbLed.Color(0, 255, 0) : rgbLed.Color(0, 0, 0));
+    rgbLed.show();
+    return;
+  }
+
+  rgbLed.setPixelColor(0, rgbLed.Color(0, 0, 0));
+  rgbLed.show();
+}
+#endif
 
 // Pines ST7735
 #define TFT_CS   11
@@ -161,13 +232,13 @@ function drawChart(data){
   ctx.fillText('Sin datos suficientes',W/2,H/2);return;
  }
  var dep=data.map(function(r){return r[1]}),hdg=data.map(function(r){return r[3]});
- var dMin=Math.min.apply(null,dep),dMax=Math.max.apply(null,dep);
+ var dMin=0,dMax=Math.max.apply(null,dep);
  var hMin=Math.min.apply(null,hdg),hMax=Math.max.apply(null,hdg);
- var dp=(dMax-dMin)*0.12||0.5;dMin-=dp;dMax+=dp;
+ var dp=dMax*0.12||2;dMax+=dp;
  var hp=(hMax-hMin)*0.12||5;hMin-=hp;hMax+=hp;
  var tMin=data[0][0],tMax=data[data.length-1][0]||1;
  function tx(t){return pl+(t-tMin)/(tMax-tMin)*cW}
- function dy(d){return pt+cH-(d-dMin)/(dMax-dMin)*cH}
+ function dy(d){return pt+(d-dMin)/(dMax-dMin)*cH}
  function hy(h){return pt+cH-(h-hMin)/(hMax-hMin)*cH}
  // grid
  ctx.strokeStyle='#21262d';ctx.lineWidth=1;
@@ -175,7 +246,7 @@ function drawChart(data){
   var y=pt+i*cH/4;
   ctx.beginPath();ctx.moveTo(pl,y);ctx.lineTo(W-pr,y);ctx.stroke();
   ctx.fillStyle='#3fb950';ctx.font='10px system-ui';ctx.textAlign='right';
-  ctx.fillText((dMax-i*(dMax-dMin)/4).toFixed(1),pl-4,y+3);
+  ctx.fillText((-i*(dMax-dMin)/4).toFixed(1),pl-4,y+3);
   ctx.fillStyle='#58a6ff';ctx.textAlign='left';
   ctx.fillText((hMax-i*(hMax-hMin)/4).toFixed(0),W-pr+4,y+3);
  }
@@ -194,7 +265,7 @@ function drawChart(data){
  data.forEach(function(r,i){if(i===0)ctx.moveTo(tx(r[0]),dy(r[1]));else ctx.lineTo(tx(r[0]),dy(r[1]))});
  ctx.stroke();
  ctx.globalAlpha=0.12;ctx.fillStyle='#3fb950';
- ctx.lineTo(tx(data[data.length-1][0]),pt+cH);ctx.lineTo(tx(data[0][0]),pt+cH);ctx.closePath();ctx.fill();
+ ctx.lineTo(tx(data[data.length-1][0]),pt);ctx.lineTo(tx(data[0][0]),pt);ctx.closePath();ctx.fill();
  ctx.globalAlpha=1;
  // heading line
  ctx.strokeStyle='#58a6ff';ctx.lineWidth=1.5;
@@ -494,11 +565,12 @@ void setupMagnetometer(void) {
 // g_depth, g_tempC, g_diveStartMs, g_dataMutex, g_deco — declarados al principio del archivo
 
 // Estado de último renderizado para redibujado selectivo
-static int   s_lastHdgInt   = -1;
-static int   s_lastDepthInt = -1;
-static int   s_lastTempInt  = -1;
-static int   s_lastNdlInt   = -9999;   // NDL en segundos enteros
-static int   s_lastCeilInt  = -1;      // techo en décimas de metro
+static int   s_lastHdgInt      = -1;
+static int   s_lastDepthInt    = -1;
+static int   s_lastTempInt     = -1;
+static int   s_lastNdlInt      = -9999;   // NDL en segundos enteros
+static int   s_lastCeilInt     = -1;      // techo en décimas de metro
+static int   s_lastElapsedSec  = -1;      // tiempo de inmersión en segundos
 
 static const uint16_t COL_DIM  = 0x4208; // gris oscuro ~(64,64,64)
 static const uint16_t COL_MID  = 0xB596; // gris medio ~(180,180,180)
@@ -575,6 +647,27 @@ static void drawDepth(float depth) {
   tft.setTextColor(tft.color565(0, 200, 100), ST77XX_BLACK);
   tft.setCursor(startX + NUM_W + 4, numY + (32 - 16) / 2);
   tft.print("m");
+}
+
+// Dibuja tiempo de inmersión MM:SS en la esquina superior derecha de la zona de profundidad
+// Actualiza solo cuando cambia el segundo — mismo nivel que la etiqueta "PROF"
+static void drawElapsed(unsigned long elapsedMs) {
+  int sec = (int)(elapsedMs / 1000UL);
+  if (sec == s_lastElapsedSec) return;
+  s_lastElapsedSec = sec;
+  int mm = sec / 60;
+  int ss = sec % 60;
+  char buf[7];
+  if (mm >= 100) {
+    snprintf(buf, sizeof(buf), ">99:59");
+  } else {
+    snprintf(buf, sizeof(buf), "%02d:%02d", mm, ss);
+  }
+  tft.setTextSize(1);
+  tft.setTextColor(COL_MID, ST77XX_BLACK);
+  // 6 chars × 6 px = 36 px — alineado a la derecha
+  tft.setCursor(SCR_W - 6 * 6 - 4, Y_DEPTH_TOP + 3);
+  tft.print(buf);
 }
 
 // Dibuja zona de datos (NDL / techo de deco + temperatura) — redibuja solo si cambia
@@ -840,6 +933,11 @@ void setup(void) {
   Serial.println("1. Serial OK");
   delay(500);
 
+#if HAS_RGB_LED
+  setupRGBLed();
+  s_ledSampleMs = millis();
+#endif
+
   setupTFT();
   Serial.println("2. TFT OK");
   delay(500);
@@ -920,6 +1018,7 @@ void loop(void) {
 
   drawHeadingStrip(heading);
   drawDepth(depth);
+  drawElapsed(elapsed);
   drawDiveData(tempC, deco);
   if (hdgChanged) {
     drawCompassBar(heading);
@@ -927,6 +1026,10 @@ void loop(void) {
   }
 
   logToSD(depth, tempC, heading, elapsed);
+
+#if HAS_RGB_LED
+  updateRGBLed(depth);
+#endif
 
   Serial.printf("Heading: %.1f  Depth: %.1f m  NDL: %.0f min  Ceil: %.1f m\n",
                 heading, depth, deco.ndl_min, deco.ceiling_m);
