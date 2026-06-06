@@ -39,5 +39,5 @@ Thumbs.db
 # Project-specific (generated/temporary files)
 *.tmp
 *.bak
-*.html
-!docs/**/*.html
+# Ignore HTML files in root only (generated documentation excluded)
+/*.html

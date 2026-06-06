@@ -3,7 +3,15 @@
     "allow": [
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\" -File | Where-Object {$_.Name -ne \".gitignore\"})",
       "Bash(gh repo *)",
-      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); gh auth status 2>&1)"
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); gh auth status 2>&1)",
+      "PowerShell(New-Item -Path \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\\\\.gitignore\" -ItemType File -Force)",
+      "PowerShell(if \\(Get-Command pio -ErrorAction SilentlyContinue\\) { \"pio found\" } elseif \\(Test-Path \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"\\) { \"pio at penv\" } else { \"pio not found\" })",
+      "PowerShell($pio = \"C:\\\\Users\\\\ahere\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"; Set-Location \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & $pio run -e i2c_scan --target upload 2>&1)",
+      "PowerShell(Stop-Process -Name \"pio\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Name \"python\" -ErrorAction SilentlyContinue)",
+      "Bash(sort -t/ -k1)",
+      "Bash(pio run *)",
+      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 20)"
     ]
   }
 }

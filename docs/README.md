@@ -1,7 +1,12 @@
 # Documentación - Brújula Compensada
 
+## Board
+
+![Seeed Studio XIAO ESP32-C3 Pinout](xiao-esp32c3-pinout.jpeg)
+
 ## Contenido
 
+- **xiao-esp32c3-pinout.jpeg** — Diagrama de pines del Seeed Studio XIAO ESP32-C3
 - **Brujula-pin-diagram.html** — Diagrama interactivo de conexiones de pines del ESP32-C3
 
 ## Descripción del Proyecto
