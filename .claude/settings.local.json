@@ -11,7 +11,17 @@
       "PowerShell(Stop-Process -Name \"python\" -ErrorAction SilentlyContinue)",
       "Bash(sort -t/ -k1)",
       "Bash(pio run *)",
-      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 20)"
+      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 20)",
+      "WebSearch",
+      "Bash(gh api *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://api.github.com/repos/antoni-heredia/DiveComputer/pages)",
+      "PowerShell(Get-Command gh -ErrorAction SilentlyContinue; \\(Get-Command gh -ErrorAction SilentlyContinue\\).Source)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" api repos/antoni-heredia/DiveComputer/pages --method POST --field source[branch]=master --field source[path]=/docs 2>&1)",
+      "PowerShell(Get-Command pio -ErrorAction SilentlyContinue; \\(Get-Command python -ErrorAction SilentlyContinue\\).Source; ls \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" -ErrorAction SilentlyContinue)",
+      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 25)"
     ]
   }
 }

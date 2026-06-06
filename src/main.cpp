@@ -9,16 +9,22 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
 #include <Adafruit_LSM303_Accel.h>
+#include <SD.h>
+#include <DNSServer.h>
 
-// Pines ST7789
+// Pines ST7735
 #define TFT_CS   11
 #define TFT_RST  9
 #define TFT_DC   10
 #define TFT_MOSI 3
 #define TFT_SCLK 4
 
-// Instanciamos la pantalla (CS, DC, RST, MOSI, SCLK)
-Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+// Pines microSD (comparte bus SPI con TFT)
+#define SD_CS   6
+#define SD_MISO 5
+
+// Instanciamos la pantalla con hardware SPI (CS, DC, RST)
+Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
 // Magnetómetro
 Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
@@ -46,8 +52,12 @@ struct CalState {
 
 float g_heading = 0;            // último rumbo calculado (lo lee el portal)
 
+static bool          s_sdOk      = false;
+static unsigned long s_lastLogMs = 0;
+
 Preferences prefs;
 WebServer   server(80);
+DNSServer   dnsServer;
 
 void loadCalibration(void) {
   prefs.begin("compass", true);
@@ -103,6 +113,23 @@ const char PAGE_HTML[] PROGMEM = R"rawliteral(
  <tr><td>offset</td><td id="ox">-</td><td id="oy">-</td><td id="oz">-</td></tr>
  <tr><td>escala</td><td id="sx">-</td><td id="sy">-</td><td id="sz">-</td></tr>
 </table></div>
+<div class="card">
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <span style="font-weight:bold">Registro SD <span id="sdcnt" style="font-size:.8rem;color:#8b949e">cargando...</span></span>
+  <div>
+   <button onclick="downloadChart()" style="font-size:.85rem;padding:6px 12px;border:0;border-radius:6px;background:#1f6feb;color:#fff;cursor:pointer;margin-right:4px">&#8659; PNG</button>
+   <button class="reset" onclick="clearLog()" style="width:auto;padding:6px 12px">Borrar</button>
+  </div>
+ </div>
+ <canvas id="chart" width="440" height="210" style="width:100%;border-radius:6px;display:block"></canvas>
+</div>
+<div class="card">
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <span style="font-weight:bold">Trayectoria <span style="font-size:.8rem;color:#8b949e">(velocidad constante)</span></span>
+  <button onclick="downloadMap()" style="font-size:.85rem;padding:6px 12px;border:0;border-radius:6px;background:#1f6feb;color:#fff;cursor:pointer">&#8659; PNG</button>
+ </div>
+ <canvas id="mapcanvas" width="340" height="340" style="width:100%;border-radius:6px;display:block"></canvas>
+</div>
 </div>
 <script>
 function cmd(c){fetch('/'+c).then(function(){setTimeout(upd,120)})}
@@ -117,10 +144,209 @@ function upd(){fetch('/status').then(function(r){return r.json()}).then(function
  ['sx','sy','sz'].forEach(function(k,i){document.getElementById(k).textContent=d.scale[i].toFixed(3)});
 })}
 setInterval(upd,400);upd();
+function drawChart(data){
+ var cv=document.getElementById('chart'),ctx=cv.getContext('2d');
+ var W=cv.width,H=cv.height,pl=46,pr=46,pt=18,pb=28,cW=W-pl-pr,cH=H-pt-pb;
+ ctx.fillStyle='#0e1116';ctx.fillRect(0,0,W,H);
+ if(data.length<2){
+  ctx.fillStyle='#8b949e';ctx.font='13px system-ui';ctx.textAlign='center';
+  ctx.fillText('Sin datos suficientes',W/2,H/2);return;
+ }
+ var dep=data.map(function(r){return r[1]}),hdg=data.map(function(r){return r[3]});
+ var dMin=Math.min.apply(null,dep),dMax=Math.max.apply(null,dep);
+ var hMin=Math.min.apply(null,hdg),hMax=Math.max.apply(null,hdg);
+ var dp=(dMax-dMin)*0.12||0.5;dMin-=dp;dMax+=dp;
+ var hp=(hMax-hMin)*0.12||5;hMin-=hp;hMax+=hp;
+ var tMin=data[0][0],tMax=data[data.length-1][0]||1;
+ function tx(t){return pl+(t-tMin)/(tMax-tMin)*cW}
+ function dy(d){return pt+cH-(d-dMin)/(dMax-dMin)*cH}
+ function hy(h){return pt+cH-(h-hMin)/(hMax-hMin)*cH}
+ // grid
+ ctx.strokeStyle='#21262d';ctx.lineWidth=1;
+ for(var i=0;i<=4;i++){
+  var y=pt+i*cH/4;
+  ctx.beginPath();ctx.moveTo(pl,y);ctx.lineTo(W-pr,y);ctx.stroke();
+  ctx.fillStyle='#3fb950';ctx.font='10px system-ui';ctx.textAlign='right';
+  ctx.fillText((dMax-i*(dMax-dMin)/4).toFixed(1),pl-4,y+3);
+  ctx.fillStyle='#58a6ff';ctx.textAlign='left';
+  ctx.fillText((hMax-i*(hMax-hMin)/4).toFixed(0),W-pr+4,y+3);
+ }
+ // axes
+ ctx.strokeStyle='#30363d';ctx.lineWidth=1;
+ ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+cH);ctx.lineTo(W-pr,pt+cH);ctx.lineTo(W-pr,pt);ctx.stroke();
+ // x labels
+ ctx.fillStyle='#8b949e';ctx.font='10px system-ui';ctx.textAlign='center';
+ [0,0.25,0.5,0.75,1].forEach(function(f){
+  var t=Math.round(tMin+f*(tMax-tMin));
+  ctx.fillText(t+'s',pl+f*cW,pt+cH+14);
+ });
+ // depth line + fill
+ ctx.strokeStyle='#3fb950';ctx.lineWidth=2;ctx.lineJoin='round';
+ ctx.beginPath();
+ data.forEach(function(r,i){if(i===0)ctx.moveTo(tx(r[0]),dy(r[1]));else ctx.lineTo(tx(r[0]),dy(r[1]))});
+ ctx.stroke();
+ ctx.globalAlpha=0.12;ctx.fillStyle='#3fb950';
+ ctx.lineTo(tx(data[data.length-1][0]),pt+cH);ctx.lineTo(tx(data[0][0]),pt+cH);ctx.closePath();ctx.fill();
+ ctx.globalAlpha=1;
+ // heading line
+ ctx.strokeStyle='#58a6ff';ctx.lineWidth=1.5;
+ ctx.beginPath();
+ data.forEach(function(r,i){if(i===0)ctx.moveTo(tx(r[0]),hy(r[3]));else ctx.lineTo(tx(r[0]),hy(r[3]))});
+ ctx.stroke();
+ // y labels
+ ctx.save();ctx.translate(10,pt+cH/2);ctx.rotate(-Math.PI/2);
+ ctx.fillStyle='#3fb950';ctx.font='bold 10px system-ui';ctx.textAlign='center';
+ ctx.fillText('Prof (m)',0,0);ctx.restore();
+ ctx.save();ctx.translate(W-8,pt+cH/2);ctx.rotate(Math.PI/2);
+ ctx.fillStyle='#58a6ff';ctx.font='bold 10px system-ui';ctx.textAlign='center';
+ ctx.fillText('Rumbo (°)',0,0);ctx.restore();
+ // legend
+ ctx.fillStyle='#3fb950';ctx.fillRect(pl+4,pt+2,10,3);
+ ctx.fillStyle='#e6edf3';ctx.font='10px system-ui';ctx.textAlign='left';ctx.fillText('Prof',pl+18,pt+6);
+ ctx.fillStyle='#58a6ff';ctx.fillRect(pl+52,pt+2,10,3);
+ ctx.fillStyle='#e6edf3';ctx.fillText('Rumbo',pl+66,pt+6);
+}
+function downloadChart(){
+ var cv=document.getElementById('chart');
+ var url=cv.toDataURL('image/png');
+ // Intento estándar (funciona en desktop y Android Chrome)
+ var a=document.createElement('a');a.href=url;a.download='registro_buceo.png';
+ document.body.appendChild(a);a.click();document.body.removeChild(a);
+ // Overlay universal: en iOS el atributo download se ignora; pulsa largo sobre la imagen para guardar
+ var ov=document.createElement('div');
+ ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+ ov.innerHTML='<p style="color:#e6edf3;margin:0 0 10px;font-size:.85rem;text-align:center">En iOS: mant&eacute;n pulsado &rarr; Guardar imagen<br>En Android/PC: la descarga ya empez&oacute;</p>'
+  +'<img src="'+url+'" style="max-width:100%;border-radius:8px;box-shadow:0 4px 24px #000">'
+  +'<button onclick="this.parentElement.remove()" style="margin-top:14px;padding:10px 28px;border:0;border-radius:8px;background:#238636;color:#fff;font-size:1rem;cursor:pointer">Cerrar</button>';
+ document.body.appendChild(ov);
+}
+function drawMap(data){
+ var cv=document.getElementById('mapcanvas'),ctx=cv.getContext('2d');
+ var W=cv.width,H=cv.height,pad=36;
+ ctx.fillStyle='#0e1116';ctx.fillRect(0,0,W,H);
+ if(data.length<2){
+  ctx.fillStyle='#8b949e';ctx.font='13px system-ui';ctx.textAlign='center';
+  ctx.fillText('Sin datos suficientes',W/2,H/2);return;
+ }
+ // Integrar trayectoria (velocidad=1 u/s, N arriba)
+ var pts=[{x:0,y:0}];
+ for(var i=1;i<data.length;i++){
+  var dt=data[i][0]-data[i-1][0];
+  var r=data[i][3]*Math.PI/180;
+  var p=pts[pts.length-1];
+  pts.push({x:p.x+Math.sin(r)*dt, y:p.y-Math.cos(r)*dt});
+ }
+ // Bounding box cuadrada con margen
+ var xs=pts.map(function(p){return p.x}),ys=pts.map(function(p){return p.y});
+ var x0=Math.min.apply(null,xs),x1=Math.max.apply(null,xs);
+ var y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys);
+ var span=Math.max(x1-x0,y1-y0)||10;
+ var cx=(x0+x1)/2,cy=(y0+y1)/2;
+ x0=cx-span*0.6;x1=cx+span*0.6;y0=cy-span*0.6;y1=cy+span*0.6;
+ var sc=Math.min((W-2*pad)/(x1-x0),(H-2*pad)/(y1-y0));
+ function mx(x){return W/2+(x-cx)*sc}
+ function my(y){return H/2+(y-cy)*sc}
+ // Grid
+ ctx.strokeStyle='#1c2128';ctx.lineWidth=1;
+ var step=Math.pow(10,Math.floor(Math.log10(span*0.4)));
+ for(var g=Math.ceil(x0/step)*step;g<=x1;g+=step){
+  ctx.beginPath();ctx.moveTo(mx(g),pad);ctx.lineTo(mx(g),H-pad);ctx.stroke();
+ }
+ for(var g=Math.ceil(y0/step)*step;g<=y1;g+=step){
+  ctx.beginPath();ctx.moveTo(pad,my(g));ctx.lineTo(W-pad,my(g));ctx.stroke();
+ }
+ // Ejes cruzados en origen
+ ctx.strokeStyle='#30363d';ctx.lineWidth=1;
+ ctx.beginPath();ctx.moveTo(mx(0),pad);ctx.lineTo(mx(0),H-pad);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(pad,my(0));ctx.lineTo(W-pad,my(0));ctx.stroke();
+ // Trayectoria con degradado azul→verde
+ for(var i=1;i<pts.length;i++){
+  var t=i/(pts.length-1);
+  var r=Math.round(63*t+30),g2=Math.round(180*t+50),b=Math.round(150*(1-t)+30);
+  ctx.strokeStyle='rgba('+r+','+g2+','+b+',0.85)';
+  ctx.lineWidth=2.5;ctx.lineJoin='round';
+  ctx.beginPath();ctx.moveTo(mx(pts[i-1].x),my(pts[i-1].y));ctx.lineTo(mx(pts[i].x),my(pts[i].y));ctx.stroke();
+ }
+ // Punto de inicio
+ ctx.fillStyle='#ffffff';
+ ctx.beginPath();ctx.arc(mx(pts[0].x),my(pts[0].y),5,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#8b949e';ctx.font='10px system-ui';ctx.textAlign='left';
+ ctx.fillText('inicio',mx(pts[0].x)+7,my(pts[0].y)+4);
+ // Flecha de posición actual (triángulo apuntando al rumbo)
+ var last=pts[pts.length-1];
+ var hdgR=data[data.length-1][3]*Math.PI/180;
+ var lx=mx(last.x),ly=my(last.y),ar=13;
+ ctx.fillStyle='#3fb950';
+ ctx.beginPath();
+ ctx.moveTo(lx+Math.sin(hdgR)*ar,   ly-Math.cos(hdgR)*ar);
+ ctx.lineTo(lx+Math.sin(hdgR+2.3)*ar*0.4, ly-Math.cos(hdgR+2.3)*ar*0.4);
+ ctx.lineTo(lx+Math.sin(hdgR-2.3)*ar*0.4, ly-Math.cos(hdgR-2.3)*ar*0.4);
+ ctx.closePath();ctx.fill();
+ // Rosa de norte (esquina superior derecha)
+ var nx=W-22,ny=22,nl=12;
+ ctx.strokeStyle='#ff4444';ctx.lineWidth=2;
+ ctx.beginPath();ctx.moveTo(nx,ny+nl);ctx.lineTo(nx,ny-nl);ctx.stroke();
+ ctx.fillStyle='#ff4444';
+ ctx.beginPath();ctx.moveTo(nx,ny-nl-4);ctx.lineTo(nx-4,ny-nl+4);ctx.lineTo(nx+4,ny-nl+4);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#8b949e';ctx.font='bold 10px system-ui';ctx.textAlign='center';
+ ctx.fillText('N',nx,ny+nl+12);
+ // Escala (en unidades relativas, 1 u = 1 s·v)
+ var barU=step,barPx=barU*sc;
+ if(barPx>20&&barPx<W*0.4){
+  var bx=pad+4,by=H-10;
+  ctx.strokeStyle='#8b949e';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+barPx,by);ctx.stroke();
+  ctx.fillStyle='#8b949e';ctx.font='9px system-ui';ctx.textAlign='left';
+  ctx.fillText(barU+' u',bx,by-3);
+ }
+}
+function downloadMap(){
+ var cv=document.getElementById('mapcanvas');
+ var url=cv.toDataURL('image/png');
+ var a=document.createElement('a');a.href=url;a.download='trayectoria.png';
+ document.body.appendChild(a);a.click();document.body.removeChild(a);
+ var ov=document.createElement('div');
+ ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+ ov.innerHTML='<p style="color:#e6edf3;margin:0 0 10px;font-size:.85rem;text-align:center">En iOS: mant&eacute;n pulsado &rarr; Guardar imagen<br>En Android/PC: la descarga ya empez&oacute;</p>'
+  +'<img src="'+url+'" style="max-width:100%;border-radius:8px;box-shadow:0 4px 24px #000">'
+  +'<button onclick="this.parentElement.remove()" style="margin-top:14px;padding:10px 28px;border:0;border-radius:8px;background:#238636;color:#fff;font-size:1rem;cursor:pointer">Cerrar</button>';
+ document.body.appendChild(ov);
+}
+function loadLog(){fetch('/data').then(function(r){
+ if(!r.ok){document.getElementById('sdcnt').textContent='SD no disponible';return Promise.reject()}
+ return r.text()
+}).then(function(txt){
+ var lines=txt.trim().split('\n');
+ var data=lines.slice(1).filter(function(l){return l.trim().length>0}).map(function(l){
+  var c=l.split(',');return[+c[0],+c[1],+c[2],+c[3]]
+ });
+ document.getElementById('sdcnt').textContent='('+data.length+' registros)';
+ drawChart(data);
+ drawMap(data);
+}).catch(function(){})}
+function clearLog(){if(confirm('Borrar el registro de la SD?'))fetch('/clearlog').then(function(){setTimeout(loadLog,200)})}
+setInterval(loadLog,6000);loadLog();
 </script></body></html>
 )rawliteral";
 
 void handleRoot(void)  { server.send_P(200, "text/html", PAGE_HTML); }
+
+void handleData(void) {
+  if (!s_sdOk) { server.send(503, "text/plain", "SD no disponible"); return; }
+  File f = SD.open("/dive.csv");
+  if (!f)      { server.send(404, "text/plain", "Sin datos");        return; }
+  server.streamFile(f, "text/csv");
+  f.close();
+}
+
+void handleClearLog(void) {
+  if (s_sdOk) {
+    SD.remove("/dive.csv");
+    File f = SD.open("/dive.csv", FILE_WRITE);
+    if (f) { f.println("t_s,prof_m,temp_c,rumbo_deg"); f.close(); }
+  }
+  server.send(200, "application/json", "{\"ok\":true}");
+}
 
 void handleStart(void) {
   calState.collecting = true;
@@ -181,12 +407,32 @@ void setupWiFi(void) {
   Serial.print("AP \""); Serial.print(AP_SSID);
   Serial.print("\" -> http://"); Serial.println(WiFi.softAPIP());
   Serial.print("MAC: "); Serial.println(WiFi.softAPmacAddress());
-  server.on("/",       handleRoot);
-  server.on("/start",  handleStart);
-  server.on("/stop",   handleStop);
-  server.on("/reset",  handleReset);
-  server.on("/status", handleStatus);
+  server.on("/",        handleRoot);
+  server.on("/start",   handleStart);
+  server.on("/stop",    handleStop);
+  server.on("/reset",   handleReset);
+  server.on("/status",  handleStatus);
+  server.on("/data",    handleData);
+  server.on("/clearlog",handleClearLog);
+
+  // Captive portal: redirigir detección de conectividad de cada SO a la página principal
+  auto redir = []() {
+    server.sendHeader("Location", "http://192.168.4.1/");
+    server.send(302, "text/plain", "");
+  };
+  server.on("/generate_204",             redir);  // Android Chrome
+  server.on("/gen_204",                  redir);  // Android alternativo
+  server.on("/hotspot-detect.html",      redir);  // iOS / macOS
+  server.on("/library/test/success.html",redir);  // macOS Safari
+  server.on("/redirect",                 redir);  // Windows 11
+  server.on("/connecttest.txt", []() { server.send(200,"text/plain","Microsoft Connect Test"); });
+  server.on("/ncsi.txt",        []() { server.send(200,"text/plain","Microsoft NCSI"); });
+  server.onNotFound(redir);
+
   server.begin();
+
+  // DNS: responde cualquier dominio con la IP del AP → fuerza el captive portal
+  dnsServer.start(53, "*", WiFi.softAPIP());
 }
 
 void setupSerial(void) {
@@ -225,9 +471,12 @@ void setupMagnetometer(void) {
 #define Y_CPASS_H   32
 
 // Datos de buceo — sustituir por lecturas de sensor real cuando esté disponible
-float          g_depth    = 0.0f;   // metros
-float          g_tempC    = 24.5f;  // grados C (placeholder)
+float          g_depth    = 0.0f;   // metros  (escrito por Core 0, leído por Core 1)
+float          g_tempC    = 24.5f;  // grados C (escrito por Core 0, leído por Core 1)
 unsigned long  g_diveStartMs = 0;   // millis() al inicio de la inmersión
+
+// Mutex para acceso seguro entre cores a g_depth / g_tempC
+static SemaphoreHandle_t g_dataMutex = nullptr;
 
 // Estado de último renderizado para redibujado selectivo
 static int   s_lastHdgInt   = -1;
@@ -413,8 +662,33 @@ static void showSplash(void) {
   tft.fillScreen(ST77XX_BLACK);
 }
 
+void setupSD(void) {
+  if (!SD.begin(SD_CS)) {
+    Serial.println("SD: no detectada o fallo init");
+    return;
+  }
+  s_sdOk = true;
+  if (!SD.exists("/dive.csv")) {
+    File f = SD.open("/dive.csv", FILE_WRITE);
+    if (f) { f.println("t_s,prof_m,temp_c,rumbo_deg"); f.close(); }
+  }
+  Serial.println("SD OK");
+}
+
+void logToSD(float depth, float tempC, float heading, unsigned long elapsedMs) {
+  if (!s_sdOk) return;
+  if (millis() - s_lastLogMs < 5000UL) return;
+  s_lastLogMs = millis();
+  File f = SD.open("/dive.csv", FILE_APPEND);
+  if (!f) return;
+  char line[48];
+  snprintf(line, sizeof(line), "%lu,%.1f,%.1f,%.1f", elapsedMs / 1000UL, depth, tempC, heading);
+  f.println(line);
+  f.close();
+}
+
 void setupTFT(void) {
-  SPI.begin(TFT_SCLK, -1, TFT_MOSI);
+  SPI.begin(TFT_SCLK, SD_MISO, TFT_MOSI);
   tft.initR(INITR_BLACKTAB);
   tft.setRotation(1);   // landscape: 160×128
   tft.fillScreen(ST77XX_BLACK);
@@ -458,6 +732,28 @@ void setupAccelerometer(void) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Core 0 — adquisición de profundidad + futuros cálculos de deco
+// ---------------------------------------------------------------------------
+void depthTask(void* /*param*/) {
+  for (;;) {
+    // TODO: reemplazar con lectura real (ej. MS5837 por I2C en Wire1)
+    float depth = 5.0f + 4.5f * sinf((float)millis() / 15000.0f);
+    if (depth < 0.0f) depth = 0.0f;
+
+    // g_tempC: placeholder hasta tener sensor de presión/temperatura real
+    // float temp = readPressureSensorTemp();
+
+    if (xSemaphoreTake(g_dataMutex, portMAX_DELAY) == pdTRUE) {
+      g_depth = depth;
+      // g_tempC = temp;
+      xSemaphoreGive(g_dataMutex);
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(100));  // 10 Hz — suficiente para profundidad y deco
+  }
+}
+
 void setup(void) {
   setupSerial();
   Serial.println("1. Serial OK");
@@ -479,8 +775,20 @@ void setup(void) {
   Serial.println("5. Accelerometer OK");
 
   loadCalibration();
+  setupSD();
+  Serial.println("6. SD OK");
+
   setupWiFi();
-  Serial.println("6. WiFi/HTTP OK");
+  Serial.println("7. WiFi/HTTP OK");
+
+  g_dataMutex = xSemaphoreCreateMutex();
+  xTaskCreatePinnedToCore(depthTask, "depthTask",
+                          4096,     // stack bytes (ampliar cuando se añada deco)
+                          nullptr,  // param
+                          1,        // prioridad baja — no compite con WiFi stack
+                          nullptr,  // handle (no necesario)
+                          0);       // Core 0
+  Serial.println("8. depthTask (Core 0) OK");
 
   g_diveStartMs = millis();
   Serial.println("Setup completado!");
@@ -489,6 +797,7 @@ void setup(void) {
 static float s_compassLastHdg = -999.0f;
 
 void loop(void) {
+  dnsServer.processNextRequest();
   server.handleClient();
 
   sensors_event_t magEv, accEv;
@@ -509,12 +818,17 @@ void loop(void) {
   float heading = calculateHeading(magEv, accEv);
   g_heading = heading;
 
-  // Profundidad simulada — reemplazar con lectura de sensor de presión real
-  g_depth = 5.0f + 4.5f * sinf((float)millis() / 15000.0f);
-  if (g_depth < 0.0f) g_depth = 0.0f;
-
-  // Temperatura placeholder — reemplazar con sensor real (ej. NTC o DS18B20)
-  // g_tempC = readTemperatureSensor();
+  // Leer profundidad y temperatura calculadas por Core 0
+  float depth, tempC;
+  if (xSemaphoreTake(g_dataMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+    depth = g_depth;
+    tempC = g_tempC;
+    xSemaphoreGive(g_dataMutex);
+  } else {
+    // El mutex no estuvo disponible en 5 ms — usar último valor conocido
+    depth = g_depth;
+    tempC = g_tempC;
+  }
 
   unsigned long elapsed = millis() - g_diveStartMs;
 
@@ -522,15 +836,17 @@ void loop(void) {
   bool hdgChanged = fabsf(heading - s_compassLastHdg) >= 1.0f;
 
   drawHeadingStrip(heading);
-  drawDepth(g_depth);
-  drawDiveData(g_tempC, elapsed);
+  drawDepth(depth);
+  drawDiveData(tempC, elapsed);
   if (hdgChanged) {
     drawCompassBar(heading);
     s_compassLastHdg = heading;
   }
 
+  logToSD(depth, tempC, heading, elapsed);
+
   Serial.printf("Heading: %.1f  Depth: %.1f m  T: %lu s\n",
-                heading, g_depth, elapsed / 1000UL);
+                heading, depth, elapsed / 1000UL);
 
   delay(30);
 }
