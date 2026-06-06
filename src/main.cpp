@@ -11,6 +11,7 @@
 #include <Adafruit_LSM303_Accel.h>
 #include <SD.h>
 #include <DNSServer.h>
+#include "deco.h"
 
 // Pines ST7735
 #define TFT_CS   11
@@ -51,6 +52,13 @@ struct CalState {
 } calState;
 
 float g_heading = 0;            // último rumbo calculado (lo lee el portal)
+
+// Datos de buceo compartidos entre Core 0 (escribe) y Core 1 (lee/dibuja)
+float          g_depth      = 0.0f;
+float          g_tempC      = 24.5f;
+unsigned long  g_diveStartMs = 0;
+static SemaphoreHandle_t g_dataMutex = nullptr;
+static DecoResult        g_deco      = {0.0f, 999.0f, false};
 
 static bool          s_sdOk      = false;
 static unsigned long s_lastLogMs = 0;
@@ -381,16 +389,29 @@ void handleReset(void) {
 }
 
 void handleStatus(void) {
-  char buf[384];
+  DecoResult deco;
+  float depth;
+  if (xSemaphoreTake(g_dataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    deco  = g_deco;
+    depth = g_depth;
+    xSemaphoreGive(g_dataMutex);
+  } else {
+    deco  = g_deco;
+    depth = g_depth;
+  }
+
+  char buf[512];
   snprintf(buf, sizeof(buf),
     "{\"state\":\"%s\",\"samples\":%ld,"
     "\"min\":[%.1f,%.1f,%.1f],\"max\":[%.1f,%.1f,%.1f],"
     "\"offset\":[%.2f,%.2f,%.2f],\"scale\":[%.3f,%.3f,%.3f],"
-    "\"heading\":%.1f}",
+    "\"heading\":%.1f,"
+    "\"depth\":%.1f,\"ndl\":%.0f,\"ceiling\":%.1f,\"in_deco\":%s}",
     calState.collecting ? "calibrating" : "idle", calState.samples,
     calState.minX, calState.minY, calState.minZ,
     calState.maxX, calState.maxY, calState.maxZ,
-    cal.ox, cal.oy, cal.oz, cal.sx, cal.sy, cal.sz, g_heading);
+    cal.ox, cal.oy, cal.oz, cal.sx, cal.sy, cal.sz, g_heading,
+    depth, deco.ndl_min, deco.ceiling_m, deco.in_deco ? "true" : "false");
   server.send(200, "application/json", buf);
 }
 
@@ -470,19 +491,14 @@ void setupMagnetometer(void) {
 #define Y_CPASS_TOP 96
 #define Y_CPASS_H   32
 
-// Datos de buceo — sustituir por lecturas de sensor real cuando esté disponible
-float          g_depth    = 0.0f;   // metros  (escrito por Core 0, leído por Core 1)
-float          g_tempC    = 24.5f;  // grados C (escrito por Core 0, leído por Core 1)
-unsigned long  g_diveStartMs = 0;   // millis() al inicio de la inmersión
-
-// Mutex para acceso seguro entre cores a g_depth / g_tempC
-static SemaphoreHandle_t g_dataMutex = nullptr;
+// g_depth, g_tempC, g_diveStartMs, g_dataMutex, g_deco — declarados al principio del archivo
 
 // Estado de último renderizado para redibujado selectivo
 static int   s_lastHdgInt   = -1;
 static int   s_lastDepthInt = -1;
 static int   s_lastTempInt  = -1;
-static unsigned long s_lastTimeSec = 0xFFFFFFFF;
+static int   s_lastNdlInt   = -9999;   // NDL en segundos enteros
+static int   s_lastCeilInt  = -1;      // techo en décimas de metro
 
 static const uint16_t COL_DIM  = 0x4208; // gris oscuro ~(64,64,64)
 static const uint16_t COL_MID  = 0xB596; // gris medio ~(180,180,180)
@@ -561,32 +577,56 @@ static void drawDepth(float depth) {
   tft.print("m");
 }
 
-// Dibuja tiempo de inmersión y temperatura — solo si cambiaron
-static void drawDiveData(float tempC, unsigned long elapsedMs) {
-  unsigned long totalSec = elapsedMs / 1000UL;
-  unsigned long mins = totalSec / 60;
-  unsigned long secs = totalSec % 60;
+// Dibuja zona de datos (NDL / techo de deco + temperatura) — redibuja solo si cambia
+// Zona izquierda:  NDL en minutos (verde) o "DECO" (rojo) si hay obligación de parada
+// Zona derecha:    techo en metros (rojo) si en deco; temperatura (naranja) si libre
+static void drawDiveData(float tempC, DecoResult deco) {
+  const int Y = Y_DATA_TOP + 5;
 
-  if (totalSec != s_lastTimeSec) {
-    s_lastTimeSec = totalSec;
+  // --- Izquierda: NDL MM:SS o DECO ---
+  int ndlSec = deco.in_deco ? -1 : (int)(deco.ndl_min * 60.0f);
+  if (ndlSec != s_lastNdlInt) {
+    s_lastNdlInt = ndlSec;
     tft.setTextSize(1);
-    tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
-    char tbuf[12];
-    snprintf(tbuf, sizeof(tbuf), "T %02lu:%02lu", mins, secs);
-    tft.setCursor(4, Y_DATA_TOP + 5);
-    tft.print(tbuf);
+    char buf[12];
+    if (deco.in_deco) {
+      tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+      tft.setCursor(4, Y);
+      tft.print("DECO    ");  // 8 chars — cubre el ancho de "NDL99:59"
+    } else {
+      int mm = ndlSec / 60;
+      int ss = ndlSec % 60;
+      if (mm >= 100) {
+        snprintf(buf, sizeof(buf), "NDL>99m ");  // 8 chars fijos
+      } else {
+        snprintf(buf, sizeof(buf), "NDL%02d:%02d", mm, ss);
+      }
+      tft.setTextColor(mm < 5 ? ST77XX_YELLOW : ST77XX_GREEN, ST77XX_BLACK);
+      tft.setCursor(4, Y);
+      tft.print(buf);
+    }
   }
 
-  int tInt = (int)(tempC * 10.0f);
-  if (tInt != s_lastTempInt) {
-    s_lastTempInt = tInt;
+  // --- Derecha: techo o temperatura ---
+  int ceilInt = (int)(deco.ceiling_m * 10.0f);
+  int tempInt = (int)(tempC * 10.0f);
+  bool rightChanged = deco.in_deco ? (ceilInt != s_lastCeilInt)
+                                   : (tempInt != s_lastTempInt);
+  if (rightChanged) {
+    s_lastCeilInt = ceilInt;
+    s_lastTempInt = tempInt;
     tft.setTextSize(1);
-    tft.setTextColor(COL_ORG, ST77XX_BLACK);
-    char tbuf[12];
-    snprintf(tbuf, sizeof(tbuf), "%5.1f%cC", tempC, char(247));
-    // 7 chars × 6 px = 42 px → alinear a la derecha
-    tft.setCursor(SCR_W - 7 * 6 - 4, Y_DATA_TOP + 5);
-    tft.print(tbuf);
+    char buf[10];
+    if (deco.in_deco) {
+      snprintf(buf, sizeof(buf), "CEI%4.1fm", deco.ceiling_m);
+      tft.setTextColor(ST77XX_RED, ST77XX_BLACK);
+    } else {
+      snprintf(buf, sizeof(buf), "%5.1f%cC", tempC, char(247));
+      tft.setTextColor(COL_ORG, ST77XX_BLACK);
+    }
+    // 8 chars × 6 px = 48 px → alinear a la derecha
+    tft.setCursor(SCR_W - 8 * 6 - 4, Y);
+    tft.print(buf);
   }
 }
 
@@ -633,11 +673,11 @@ static void drawFrame(void) {
   tft.drawFastHLine(0, Y_CPASS_TOP, SCR_W, lineCol);
 }
 
-static void drawAll(float heading, float depth, float tempC, unsigned long elapsedMs) {
+static void drawAll(float heading, float depth, float tempC, DecoResult deco) {
   drawHeadingStrip(heading);
   drawDepth(depth);
-  drawDiveData(tempC, elapsedMs);
-  drawCompassBar(heading);  // siempre redibuja cuando heading cambia (ve su propia lógica abajo)
+  drawDiveData(tempC, deco);
+  drawCompassBar(heading);
 }
 
 static void showSplash(void) {
@@ -733,24 +773,65 @@ void setupAccelerometer(void) {
 }
 
 // ---------------------------------------------------------------------------
-// Core 0 — adquisición de profundidad + futuros cálculos de deco
+// Perfil de inmersión simulada: ~30 m
+//
+// Keyframes de un buceo recreativo real:
+//   0 s   →   0 m  superficie
+// 180 s   →  30 m  bajada 10 m/min (3 min)
+// 1080 s  →  30 m  fondo 15 min (NDL Bühlmann ≈ 17 min a 30 m, GF 0.85)
+// 1260 s  →   5 m  ascenso 8 m/min (~3 min)
+// 1440 s  →   5 m  parada de seguridad 3 min
+// 1500 s  →   0 m  superficie
+// 3300 s  →   0 m  intervalo superficie 30 min (ciclo)
+// ---------------------------------------------------------------------------
+static float diveProfile(uint32_t t_s) {
+  static const struct { uint32_t t; float d; } KF[] = {
+    {    0,  0.0f},
+    {  180, 30.0f},
+    { 1080, 30.0f},
+    { 1260,  5.0f},
+    { 1440,  5.0f},
+    { 1500,  0.0f},
+    { 3300,  0.0f},
+  };
+  static const int N = (int)(sizeof(KF) / sizeof(KF[0]));
+
+  t_s = t_s % 3300u;  // ciclo 55 min: 25 min inmersión + 30 min superficie
+
+  if (t_s >= KF[N-1].t) return KF[N-1].d;
+  for (int i = 1; i < N; i++) {
+    if (t_s <= KF[i].t) {
+      float alpha = (float)(t_s - KF[i-1].t) / (float)(KF[i].t - KF[i-1].t);
+      return KF[i-1].d + alpha * (KF[i].d - KF[i-1].d);
+    }
+  }
+  return 0.0f;
+}
+
+// ---------------------------------------------------------------------------
+// Core 0 — adquisición de profundidad + Bühlmann ZHL-16C
 // ---------------------------------------------------------------------------
 void depthTask(void* /*param*/) {
-  for (;;) {
-    // TODO: reemplazar con lectura real (ej. MS5837 por I2C en Wire1)
-    float depth = 5.0f + 4.5f * sinf((float)millis() / 15000.0f);
-    if (depth < 0.0f) depth = 0.0f;
+  static DecoEngine engine;
+  engine.init();  // tejidos inicializados a saturación de superficie
 
-    // g_tempC: placeholder hasta tener sensor de presión/temperatura real
-    // float temp = readPressureSensorTemp();
+  const float DT_S = 0.1f;  // paso de integración: 100 ms
+
+  for (;;) {
+    // TODO: reemplazar con lectura real del sensor de presión (ej. MS5837 en Wire1)
+    uint32_t elapsed_s = (uint32_t)((millis() - g_diveStartMs) / 1000UL);
+    float depth = diveProfile(elapsed_s);
+
+    engine.update(depth, DT_S);
+    DecoResult deco = engine.calculate(depth);
 
     if (xSemaphoreTake(g_dataMutex, portMAX_DELAY) == pdTRUE) {
       g_depth = depth;
-      // g_tempC = temp;
+      g_deco  = deco;
       xSemaphoreGive(g_dataMutex);
     }
 
-    vTaskDelay(pdMS_TO_TICKS(100));  // 10 Hz — suficiente para profundidad y deco
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
@@ -818,16 +899,18 @@ void loop(void) {
   float heading = calculateHeading(magEv, accEv);
   g_heading = heading;
 
-  // Leer profundidad y temperatura calculadas por Core 0
+  // Leer profundidad, temperatura y datos de deco calculados por Core 0
   float depth, tempC;
+  DecoResult deco;
   if (xSemaphoreTake(g_dataMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
     depth = g_depth;
     tempC = g_tempC;
+    deco  = g_deco;
     xSemaphoreGive(g_dataMutex);
   } else {
-    // El mutex no estuvo disponible en 5 ms — usar último valor conocido
     depth = g_depth;
     tempC = g_tempC;
+    deco  = g_deco;
   }
 
   unsigned long elapsed = millis() - g_diveStartMs;
@@ -837,7 +920,7 @@ void loop(void) {
 
   drawHeadingStrip(heading);
   drawDepth(depth);
-  drawDiveData(tempC, elapsed);
+  drawDiveData(tempC, deco);
   if (hdgChanged) {
     drawCompassBar(heading);
     s_compassLastHdg = heading;
@@ -845,8 +928,8 @@ void loop(void) {
 
   logToSD(depth, tempC, heading, elapsed);
 
-  Serial.printf("Heading: %.1f  Depth: %.1f m  T: %lu s\n",
-                heading, depth, elapsed / 1000UL);
+  Serial.printf("Heading: %.1f  Depth: %.1f m  NDL: %.0f min  Ceil: %.1f m\n",
+                heading, depth, deco.ndl_min, deco.ceiling_m);
 
   delay(30);
 }

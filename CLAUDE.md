@@ -55,9 +55,25 @@ The source file `src/main.cpp` has hardcoded `#define` pin values that match the
 | 6 | I2C | SDA | HMC5883 + LSM303 |
 | 7 | I2C | SCL | HMC5883 + LSM303 |
 
-## Architecture
+## Source Files
 
-Everything lives in [`src/main.cpp`](src/main.cpp). No separate modules — setup, sensor logic, calibration, WiFi server, and rendering are all in one file.
+| File | Purpose |
+|------|---------|
+| [`src/main.cpp`](src/main.cpp) | Main firmware: sensors, TFT, WiFi, SD, FreeRTOS tasks |
+| [`src/deco.h`](src/deco.h) | Bühlmann ZHL-16C decompression engine (self-contained, no dynamic alloc) |
+
+## Dual-Core Architecture (ESP32-S3)
+
+The firmware uses both Xtensa LX7 cores via FreeRTOS:
+
+| Core | Task | Responsibility | Rate |
+|------|------|----------------|------|
+| Core 1 | `loop()` (Arduino default) | Compass, accelerometer, TFT render, WiFi, DNS, SD | ~33 Hz |
+| Core 0 | `depthTask` | Depth sensor + Bühlmann ZHL-16C deco calculations | 10 Hz |
+
+Shared state (`g_depth`, `g_deco`) is protected by `g_dataMutex` (FreeRTOS mutex). Core 1 uses a 5 ms timeout when taking the mutex to avoid blocking the render loop.
+
+**Warning:** The I2C bus (`Wire`) is used only from Core 1. A future pressure sensor on Core 0 must use `Wire1` or an additional mutex.
 
 **Initialization order** (`setup()`):
 1. Serial (USB CDC — waits up to 2 s for enumeration)
@@ -67,14 +83,22 @@ Everything lives in [`src/main.cpp`](src/main.cpp). No separate modules — setu
 5. LSM303 accelerometer (`address 0x18`, SA0=GND)
 6. Load calibration from NVS (`Preferences` namespace `"compass"`)
 7. WiFi AP + HTTP server (`setupWiFi()`)
+8. Create `g_dataMutex` + launch `depthTask` on Core 0 (priority 1, 4 KB stack)
 
-**Data flow (every 30 ms in `loop()`):**
-1. `server.handleClient()` — serves calibration portal requests
+**Core 1 data flow (every 30 ms in `loop()`):**
+1. `dnsServer.processNextRequest()` + `server.handleClient()`
 2. `accel.getEvent()` + `mag.getEvent()` → raw sensor data
 3. If calibrating: update min/max accumulators for hard-iron calculation
 4. `calculateHeading(magEv, accEv)` → tilt-compensated heading (0–360°), stored in `g_heading`
-5. Simulate depth (`g_depth`) and temperature (`g_tempC`) — **placeholder, no real pressure sensor yet**
-6. Selective redraw: `drawHeadingStrip()`, `drawDepth()`, `drawDiveData()`, `drawCompassBar()` (each only updates when its value changes)
+5. Read `g_depth` + `g_deco` from shared globals (mutex-protected, 5 ms timeout)
+6. Selective redraw: `drawHeadingStrip()`, `drawDepth()`, `drawDiveData()`, `drawCompassBar()`
+7. `logToSD()` every 5 s
+
+**Core 0 data flow (every 100 ms in `depthTask`):**
+1. Read depth (currently simulated — replace with real pressure sensor)
+2. `engine.update(depth, 0.1f)` — integrate Haldane equation
+3. `engine.calculate(depth)` → `DecoResult {ndl_min, ceiling_m, in_deco}`
+4. Write `g_depth` + `g_deco` under mutex
 
 **`calculateHeading()` algorithm:**
 1. Remap physical sensor axes to formula frame: sensor-X=down, sensor-Y=left, sensor-Z=forward → formula X=forward, Y=left, Z=up
@@ -84,21 +108,58 @@ Everything lives in [`src/main.cpp`](src/main.cpp). No separate modules — setu
 5. `atan2(Yh, Xh)` + magnetic declination (−0.011 rad, tuned for Alcalá la Real)
 6. Normalize to 0–360°
 
+## Bühlmann ZHL-16C Decompression Engine (`src/deco.h`)
+
+Self-contained implementation. No `new`/`malloc`, no STL, no stdlib beyond `<math.h>`. Safe for FreeRTOS stack allocation.
+
+**Algorithm summary:**
+- 16 N₂ tissue compartments with individual half-times (5–635 min) and a/b coefficients
+- Haldane gas loading: `P_t += (P_alv - P_t) × (1 - e^(-ln2/t½ × Δt))`
+- Alveolar N₂: `P_alv = (P_amb - 0.0627) × 0.7902`  (water vapour + air fraction)
+- M-value with GF: `M_surf = 1 + GF × (a + 1/b - 1)`
+- NDL (analytical): `t = -ln(1 - (M_surf - P_t)/(P_alv - P_t)) / k`
+- Ceiling: `P_ceil = (P_t - GF×a) / (1 + GF×(1/b - 1))`
+
+**Configuration constants in `deco.h`:**
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `DECO_GF` | 0.85 | Gradient factor (recreational moderate) |
+| `DECO_FN2` | 0.7902 | N₂ fraction in air |
+| `DECO_PH2O` | 0.0627 bar | Water vapour pressure at 37 °C |
+| `DECO_N` | 16 | Number of compartments |
+
+**API:**
+```cpp
+DecoEngine engine;
+engine.init();                          // tissues → surface saturation
+engine.update(depth_m, dt_s);          // integrate Haldane for dt_s seconds
+DecoResult r = engine.calculate(depth_m);
+// r.ndl_min    — minutes of NDL remaining (0 if in deco)
+// r.ceiling_m  — ascent ceiling in metres (0 if no deco)
+// r.in_deco    — true if decompression required
+```
+
 ## Screen Layout (rotation=1 → 160×128 landscape)
 
 ```
 y   0..15   Heading strip: degrees (cyan) + cardinal label (white, textSize=2)
 y  16..77   Depth zone: "PROF" label + large green number (textSize=4) + "m" unit
-y  78..95   Data zone: dive time (yellow, left) + temperature (orange, right)
+y  78..95   Data zone: NDL in minutes (green/yellow) or "DECO" (red) + temp/ceiling
 y  96..127  Compass bar (32 px): scrolling tick marks + cardinal labels + fixed red triangle pointer
 ```
+
+Data zone display logic:
+- `NDL XX'` green — NDL > 5 min, no decompression
+- `NDL  X'` yellow — NDL ≤ 5 min, approaching limit
+- `DECO   ` red + `CEI X.Xm` red — decompression required
 
 Divider lines drawn once by `drawFrame()` at y=16, y=78, y=96.
 
 **Rendering functions:**
 - `drawHeadingStrip(heading)` — skips if heading int unchanged
 - `drawDepth(depth)` — skips if depth×10 int unchanged (≥0.1 m resolution)
-- `drawDiveData(tempC, elapsedMs)` — skips time if same second, skips temp if same 0.1°C
+- `drawDiveData(tempC, deco)` — skips NDL if same minute, skips temp/ceiling if same 0.1 unit
 - `drawCompassBar(heading)` — always redraws when called; 90° FOV, marks every 15°, cardinals every 90°, intermediates every 45°
 - `showSplash()` — dive flag + "Toni Heredia", shown once during `setupTFT()`
 
@@ -112,7 +173,9 @@ WiFi AP SSID `"Brujula-Calib"` (open network). Connect and open `http://192.168.
 | `/start` | Begin collecting min/max samples |
 | `/stop` | Compute hard-iron offsets + soft-iron scales, save to NVS |
 | `/reset` | Reset offsets=0, scales=1, save to NVS |
-| `/status` | JSON: state, samples, min/max, offset, scale, heading |
+| `/status` | JSON: state, samples, min/max, offset, scale, heading, depth, ndl, ceiling, in_deco |
+| `/data` | Serve dive log CSV from SD card |
+| `/clearlog` | Clear dive log on SD card |
 
 `Calibration` struct: `ox/oy/oz` (hard-iron offsets in µT), `sx/sy/sz` (soft-iron scales). Persisted in `Preferences` namespace `"compass"`.
 
@@ -121,5 +184,7 @@ WiFi AP SSID `"Brujula-Calib"` (open network). Connect and open `http://192.168.
 - USB CDC: `ARDUINO_USB_MODE=1`, `ARDUINO_USB_CDC_ON_BOOT=1` — Serial waits up to 2 s (won't block indefinitely when running on battery).
 - SPI must be initialized explicitly with `SPI.begin(TFT_SCLK, -1, TFT_MOSI)` before `tft.initR()`.
 - LSM303 I2C address is `0x18` (SA0 pin tied to GND); default library address is `0x19`.
-- `g_depth` and `g_tempC` are currently simulated (sine wave / placeholder) — replace with real pressure sensor readings.
+- `g_depth` is currently simulated (sine wave) in `depthTask` — replace with real pressure sensor (e.g. MS5837 on `Wire1`).
+- `g_tempC` is a placeholder — will come from the pressure sensor when integrated.
+- `depthTask` stack is 4 KB; increase to 8 KB when adding full deco stop schedule calculation.
 - `src/main.xxcpp` is an older prototype (magnetometer only, no TFT, no tilt compensation) kept for reference — it is not compiled.

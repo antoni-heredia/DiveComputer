@@ -21,7 +21,14 @@
       "Bash(git push *)",
       "PowerShell(& \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" api repos/antoni-heredia/DiveComputer/pages --method POST --field source[branch]=master --field source[path]=/docs 2>&1)",
       "PowerShell(Get-Command pio -ErrorAction SilentlyContinue; \\(Get-Command python -ErrorAction SilentlyContinue\\).Source; ls \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" -ErrorAction SilentlyContinue)",
-      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 25)"
+      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 25)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python3 -c \"import sys,json; t=json.load\\(sys.stdin\\); [print\\(i['path']\\) for i in t['tree'] if i['type']=='blob']\")",
+      "PowerShell(gh api repos/guyfleeman/libbuhlmann/git/trees/master --jq '.tree[] | select\\(.type==\"blob\"\\) | .path' 2>&1)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "PowerShell(where.exe pio 2>$null; Get-Command pio -ErrorAction SilentlyContinue; ls \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" -ErrorAction SilentlyContinue)",
+      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 20)"
     ]
   }
 }

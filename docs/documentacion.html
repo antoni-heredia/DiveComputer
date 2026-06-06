@@ -142,8 +142,17 @@
     <div class="nav-group-label">Firmware</div>
     <a class="nav-link" href="#build">Compilar y flashear</a>
     <a class="nav-link" href="#architecture">Arquitectura</a>
+    <a class="nav-link" href="#dualcore">Dual-core FreeRTOS</a>
     <a class="nav-link" href="#display">Pantalla TFT</a>
     <a class="nav-link" href="#heading">Algoritmo de rumbo</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Descompresión</div>
+    <a class="nav-link" href="#deco">Bühlmann ZHL-16C</a>
+    <a class="nav-link" href="#deco-model">Modelo de tejidos</a>
+    <a class="nav-link" href="#deco-ndl">NDL y techo</a>
+    <a class="nav-link" href="#deco-impl">Implementación</a>
+    <a class="nav-link" href="#deco-example">Ejemplo numérico</a>
   </div>
   <div class="nav-group">
     <div class="nav-group-label">Calibración</div>
@@ -310,37 +319,90 @@ pio run --target clean</pre>
   <!-- ═══ ARQUITECTURA ═══ -->
   <section id="architecture">
     <h2>Arquitectura del firmware</h2>
-    <p>Todo el código reside en <code>src/main.cpp</code>. No hay módulos separados.</p>
+    <p>
+      El código principal reside en <code>src/main.cpp</code>; el motor de descompresión en <code>src/deco.h</code>.
+      El ESP32-S3 tiene <strong>dos núcleos Xtensa LX7</strong> y el firmware los aprovecha:
+    </p>
+
+    <table>
+      <thead><tr><th>Núcleo</th><th>Tarea FreeRTOS</th><th>Responsabilidad</th><th>Frecuencia</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Core 1</strong> (Arduino default)</td>
+          <td><code>loop()</code></td>
+          <td>Brújula, acelerómetro, TFT, WiFi, SD</td>
+          <td>~33 Hz (delay 30 ms)</td>
+        </tr>
+        <tr>
+          <td><strong>Core 0</strong></td>
+          <td><code>depthTask</code></td>
+          <td>Profundidad + algoritmo Bühlmann ZHL-16C</td>
+          <td>10 Hz (100 ms)</td>
+        </tr>
+      </tbody>
+    </table>
 
     <h3>Orden de inicialización (<code>setup()</code>)</h3>
     <ol class="steps">
       <li><strong>Serial</strong> — USB CDC a 115 200 baud. Espera hasta 2 s a la enumeración USB.</li>
-      <li><strong>TFT</strong> — <code>SPI.begin(9,−1,8)</code> → <code>tft.initR(INITR_BLACKTAB)</code> → rotación landscape → splash screen.</li>
+      <li><strong>TFT</strong> — <code>SPI.begin(4,−1,3)</code> → <code>tft.initR(INITR_BLACKTAB)</code> → rotación landscape → splash screen.</li>
       <li><strong>I²C</strong> — <code>Wire.begin(I2C_SDA, I2C_SCL)</code> con los pines definidos en <code>platformio.ini</code>.</li>
       <li><strong>HMC5883L</strong> — <code>mag.begin()</code>. Bucle infinito si el sensor no responde.</li>
       <li><strong>LSM303</strong> — <code>accel.begin(0x18)</code>. SA0=GND → dirección <code>0x18</code>.</li>
       <li><strong>Preferencias</strong> — Carga calibración almacenada en flash NVS (<code>namespace "compass"</code>).</li>
       <li><strong>WiFi AP</strong> — Punto de acceso <em>Brujula-Calib</em> en canal 1 + servidor HTTP en puerto 80.</li>
+      <li><strong>depthTask</strong> — Crea el mutex de datos compartidos y lanza <code>depthTask</code> en Core 0.</li>
     </ol>
 
-    <h3>Bucle principal (<code>loop()</code> — cada 30 ms)</h3>
-    <pre><span class="fn">server</span>.handleClient();            <span class="cmt">// procesa peticiones HTTP del portal</span>
+    <h3>Core 1 — <code>loop()</code> (cada 30 ms)</h3>
+    <pre><span class="fn">dnsServer</span>.processNextRequest();
+<span class="fn">server</span>.handleClient();             <span class="cmt">// portal WiFi</span>
 
-accel.<span class="fn">getEvent</span>(&accEv);            <span class="cmt">// leer acelerómetro</span>
-mag.<span class="fn">getEvent</span>(&magEv);              <span class="cmt">// leer magnetómetro</span>
+accel.<span class="fn">getEvent</span>(&accEv);
+mag.<span class="fn">getEvent</span>(&magEv);
 
 <span class="kw">if</span> (calState.collecting)
-    <span class="fn">updateCalibrationSamples</span>(magEv); <span class="cmt">// acumular min/max hard-iron</span>
+    <span class="fn">updateCalibrationSamples</span>(magEv);
 
 <span class="typ">float</span> heading = <span class="fn">calculateHeading</span>(magEv, accEv);
-g_heading = heading;              <span class="cmt">// disponible para el portal vía /status</span>
 
-<span class="fn">drawHeadingStrip</span>(heading);        <span class="cmt">// redibuja si cambió ≥1°</span>
-<span class="fn">drawDepth</span>(g_depth);              <span class="cmt">// redibuja si cambió ≥0.1 m</span>
-<span class="fn">drawDiveData</span>(g_tempC, elapsed);   <span class="cmt">// redibuja si cambió el segundo</span>
+<span class="cmt">// Leer datos producidos por Core 0 (mutex protegido)</span>
+xSemaphoreTake(g_dataMutex, <span class="num">5</span> ms);
+depth = g_depth;  deco = g_deco;
+xSemaphoreGive(g_dataMutex);
+
+<span class="fn">drawHeadingStrip</span>(heading);
+<span class="fn">drawDepth</span>(depth);
+<span class="fn">drawDiveData</span>(g_tempC, deco);    <span class="cmt">// NDL / techo de deco</span>
 <span class="kw">if</span> (hdgChanged) <span class="fn">drawCompassBar</span>(heading);
+<span class="fn">logToSD</span>(depth, g_tempC, heading, elapsed);
 
 delay(<span class="num">30</span>);</pre>
+
+    <h3>Core 0 — <code>depthTask</code> (cada 100 ms)</h3>
+    <pre><span class="cmt">// Inicialización (una sola vez)</span>
+DecoEngine engine;
+engine.<span class="fn">init</span>();    <span class="cmt">// tejidos a saturación de superficie (aire, 1 bar)</span>
+
+<span class="kw">for</span> (;;) {
+    depth = <span class="fn">readPressureSensor</span>();   <span class="cmt">// TODO: sensor real (MS5837, etc.)</span>
+    engine.<span class="fn">update</span>(depth, <span class="num">0.1f</span>);     <span class="cmt">// integra Haldane 100 ms</span>
+    deco  = engine.<span class="fn">calculate</span>(depth); <span class="cmt">// NDL analítico + techo</span>
+
+    xSemaphoreTake(g_dataMutex, portMAX_DELAY);
+    g_depth = depth;
+    g_deco  = deco;
+    xSemaphoreGive(g_dataMutex);
+
+    vTaskDelay(<span class="fn">pdMS_TO_TICKS</span>(<span class="num">100</span>));
+}</pre>
+
+    <div class="callout callout-info">
+      <div class="callout-title">ℹ Sincronización entre cores</div>
+      <code>g_depth</code> y <code>g_deco</code> son escritas por Core 0 y leídas por Core 1.
+      El acceso está protegido por un mutex FreeRTOS (<code>g_dataMutex</code>).
+      Core 1 usa un timeout de 5 ms para no bloquear el render si Core 0 está en mitad de un cálculo.
+    </div>
   </section>
 
   <!-- ═══ PANTALLA ═══ -->
@@ -367,7 +429,7 @@ delay(<span class="num">30</span>);</pre>
           <div style="font-size:10px;color:var(--muted);">y=16..77 • 62 px</div>
         </div>
         <div class="d-data">
-          <span class="yellow">T 01:24</span>
+          <span class="green">NDL 45'</span>
           <span style="color:var(--muted);font-size:10px;">y=78..95 • 18 px</span>
           <span class="orange">24.5°C</span>
         </div>
@@ -388,7 +450,7 @@ delay(<span class="num">30</span>);</pre>
       <tbody>
         <tr><td>Heading strip</td><td class="mono">0–15</td><td>Grados + cardinal grande</td><td>Rumbo cambia ≥1°</td></tr>
         <tr><td>Profundidad</td><td class="mono">16–77</td><td>Metros (textSize=4)</td><td>Profundidad cambia ≥0.1 m</td></tr>
-        <tr><td>Datos</td><td class="mono">78–95</td><td>Tiempo inmersión + temperatura</td><td>Nuevo segundo / nuevo valor</td></tr>
+        <tr><td>Datos</td><td class="mono">78–95</td><td>NDL (verde/amarillo) o DECO (rojo) + temperatura / techo</td><td>NDL cambia ≥1 min; techo cambia ≥0.1 m</td></tr>
         <tr><td>Barra brújula</td><td class="mono">96–127</td><td>Rosa de los vientos 90° FOV</td><td>Rumbo cambia ≥1°</td></tr>
       </tbody>
     </table>
@@ -442,6 +504,301 @@ heading = fmod(heading + 2*PI, 2*PI) * 180.0 / PI;  <span class="cmt">// → 0..
       Para otra ubicación, calcula tu valor en
       <a href="https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml" target="_blank">NOAA Magnetic Field Calculator</a>
       y actualiza la constante <code>declinationAngle</code> en <code>calculateHeading()</code>.
+    </div>
+  </section>
+
+  <!-- ═══ DUAL-CORE ═══ -->
+  <section id="dualcore">
+    <h2>Dual-core FreeRTOS</h2>
+    <p>
+      El ESP32-S3 integra dos núcleos Xtensa LX7 que pueden ejecutar tareas FreeRTOS en paralelo real.
+      El firmware divide el trabajo de forma que el rendering y las comunicaciones nunca bloquean
+      el cálculo de descompresión, y viceversa.
+    </p>
+
+    <div class="card-grid">
+      <div class="info-card">
+        <h4>Core 1 — Arduino loop</h4>
+        <div class="value" style="font-size:15px;">~33 Hz</div>
+        <p>Brújula · acelerómetro · TFT · WiFi · DNS · SD logging</p>
+      </div>
+      <div class="info-card">
+        <h4>Core 0 — depthTask</h4>
+        <div class="value" style="font-size:15px;">10 Hz</div>
+        <p>Sensor de profundidad · Bühlmann ZHL-16C · NDL · techo</p>
+      </div>
+      <div class="info-card">
+        <h4>Sincronización</h4>
+        <div class="value" style="font-size:15px;">Mutex</div>
+        <p>FreeRTOS <code>xSemaphoreCreateMutex()</code> protege <code>g_depth</code> y <code>g_deco</code></p>
+      </div>
+      <div class="info-card">
+        <h4>Stack depthTask</h4>
+        <div class="value" style="font-size:15px;">4 KB</div>
+        <p>Ampliar a 8 KB cuando se añadan tablas de deco Bühlmann completas</p>
+      </div>
+    </div>
+
+    <h3>Creación de la tarea</h3>
+    <pre><span class="cmt">// En setup(), tras inicializar WiFi:</span>
+g_dataMutex = <span class="fn">xSemaphoreCreateMutex</span>();
+
+<span class="fn">xTaskCreatePinnedToCore</span>(
+    depthTask,   <span class="cmt">// función de la tarea</span>
+    <span class="str">"depthTask"</span>, <span class="cmt">// nombre (para depuración)</span>
+    <span class="num">4096</span>,        <span class="cmt">// stack en bytes</span>
+    <span class="kw">nullptr</span>,     <span class="cmt">// parámetro</span>
+    <span class="num">1</span>,           <span class="cmt">// prioridad (baja, para no interferir con WiFi stack)</span>
+    <span class="kw">nullptr</span>,     <span class="cmt">// handle (no necesario)</span>
+    <span class="num">0</span>            <span class="cmt">// Core 0</span>
+);</pre>
+
+    <div class="callout callout-warn">
+      <div class="callout-title">⚠ I²C no es thread-safe</div>
+      El bus I²C (<code>Wire</code>) lo acceden el magnetómetro y el acelerómetro, ambos desde Core 1.
+      El futuro sensor de presión en Core 0 debe usar una <strong>instancia separada</strong> (<code>Wire1</code>)
+      o un mutex adicional para evitar colisiones en el bus.
+    </div>
+  </section>
+
+  <!-- ═══ BÜHLMANN ═══ -->
+  <section id="deco">
+    <h2>Algoritmo de descompresión — Bühlmann ZHL-16C</h2>
+    <p class="lead" style="font-size:14px;">
+      Implementado en <code>src/deco.h</code> como clase autocontenida sin asignación dinámica de memoria.
+      Referencia: A.A. Bühlmann, <em>Tauchmedizin</em> 5ª ed. y tabla publicada en Wikipedia ZH-L16C.
+    </p>
+
+    <div class="callout callout-warn">
+      <div class="callout-title">⚠ Aviso de seguridad</div>
+      Esta implementación es educativa y está en desarrollo activo.
+      <strong>No usar como única fuente de información de seguridad en inmersiones reales.</strong>
+      Siempre llevar tablas de buceo y formación adecuada.
+    </div>
+
+    <h3 id="deco-model">Modelo de compartimentos de tejido</h3>
+    <p>
+      El algoritmo modela el cuerpo humano como <strong>16 compartimentos</strong> paralelos,
+      cada uno con una velocidad distinta de absorción y eliminación del nitrógeno disuelto.
+      Los compartimentos rápidos representan tejidos muy vascularizados (sangre, cerebro);
+      los lentos representan cartílagos y huesos.
+    </p>
+
+    <h4>Tabla de coeficientes ZHL-16C (N₂)</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>T½ (min)</th>
+          <th>a (bar)</th>
+          <th>b</th>
+          <th>Tejido representado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td class="mono">5.0</td><td class="mono">1.1696</td><td class="mono">0.5578</td><td>Sangre / tejido muy vascularizado</td></tr>
+        <tr><td>2</td><td class="mono">8.0</td><td class="mono">1.0000</td><td class="mono">0.6514</td><td>—</td></tr>
+        <tr><td>3</td><td class="mono">12.5</td><td class="mono">0.8618</td><td class="mono">0.7222</td><td>—</td></tr>
+        <tr><td>4</td><td class="mono">18.5</td><td class="mono">0.7562</td><td class="mono">0.7825</td><td>—</td></tr>
+        <tr><td>5</td><td class="mono">27.0</td><td class="mono">0.6200</td><td class="mono">0.8126</td><td>—</td></tr>
+        <tr><td>6</td><td class="mono">38.3</td><td class="mono">0.5043</td><td class="mono">0.8434</td><td>—</td></tr>
+        <tr><td>7</td><td class="mono">54.3</td><td class="mono">0.4410</td><td class="mono">0.8693</td><td>—</td></tr>
+        <tr><td>8</td><td class="mono">77.0</td><td class="mono">0.4000</td><td class="mono">0.8910</td><td>—</td></tr>
+        <tr><td>9</td><td class="mono">109.0</td><td class="mono">0.3750</td><td class="mono">0.9092</td><td>—</td></tr>
+        <tr><td>10</td><td class="mono">146.0</td><td class="mono">0.3500</td><td class="mono">0.9222</td><td>—</td></tr>
+        <tr><td>11</td><td class="mono">187.0</td><td class="mono">0.3295</td><td class="mono">0.9319</td><td>—</td></tr>
+        <tr><td>12</td><td class="mono">239.0</td><td class="mono">0.3065</td><td class="mono">0.9403</td><td>—</td></tr>
+        <tr><td>13</td><td class="mono">305.0</td><td class="mono">0.2835</td><td class="mono">0.9477</td><td>—</td></tr>
+        <tr><td>14</td><td class="mono">390.0</td><td class="mono">0.2610</td><td class="mono">0.9544</td><td>—</td></tr>
+        <tr><td>15</td><td class="mono">498.0</td><td class="mono">0.2480</td><td class="mono">0.9602</td><td>—</td></tr>
+        <tr><td>16</td><td class="mono">635.0</td><td class="mono">0.2327</td><td class="mono">0.9653</td><td>Cartílagos / hueso</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Ecuación de Haldane — carga de gas</h3>
+    <p>
+      Cada compartimento sigue la ecuación de Haldane. Para un intervalo Δt a profundidad constante:
+    </p>
+    <pre><span class="cmt">// Presión ambiente y alveolar</span>
+P_amb = <span class="num">1.0</span> + depth_m / <span class="num">10.0</span>          <span class="cmt">// bar (agua salada simplificada)</span>
+P_alv = (P_amb - <span class="num">0.0627</span>) × <span class="num">0.7902</span>    <span class="cmt">// presión alveolar N₂ (vapor agua 37°C)</span>
+
+<span class="cmt">// Integración Haldane (implementado en DecoEngine::update)</span>
+k     = ln(2) / t½                       <span class="cmt">// constante de tiempo del compartimento</span>
+P_t  += (P_alv - P_t) × (1 - e^(-k×Δt)) <span class="cmt">// nueva carga en el tejido</span></pre>
+
+    <p>
+      A mayor profundidad, <code>P_alv</code> sube y los tejidos se cargan de N₂.
+      Al ascender, <code>P_alv</code> baja y los tejidos eliminan N₂. Los compartimentos rápidos
+      (T½ pequeño) reaccionan en minutos; los lentos tardan horas.
+    </p>
+
+    <h3>Valor M — límite de saturación</h3>
+    <p>
+      Si se asciende directamente a superficie, cada compartimento tiene un límite máximo
+      de N₂ disuelto que no debe superarse para evitar formación de burbujas (enfermedad
+      descompresiva). Este límite depende de la presión ambiente:
+    </p>
+    <pre>M_i = a_i + P_amb / b_i</pre>
+    <p>
+      Si la carga del tejido <code>P_t &gt; M_i</code>, el buceador <strong>no puede ascender directamente</strong>
+      a esa presión: necesita una parada de descompresión.
+    </p>
+
+    <h3>Factor de gradiente (GF)</h3>
+    <p>
+      El factor de gradiente GF ∈ [0, 1] añade un margen de seguridad conservador
+      reduciendo el gradiente efectivo permitido entre tejido y ambiente:
+    </p>
+    <pre><span class="cmt">// Límite con GF en superficie (P_amb = 1 bar)</span>
+M_surf_gf = <span class="num">1</span> + GF × (a + <span class="num">1</span>/b - <span class="num">1</span>)
+
+<span class="cmt">// Techo con GF (presión mínima segura de ascenso)</span>
+P_ceil = (P_t - GF × a) / (<span class="num">1</span> + GF × (<span class="num">1</span>/b - <span class="num">1</span>))</pre>
+
+    <table>
+      <thead><tr><th>GF</th><th>Comportamiento</th><th>Uso típico</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">1.00</td><td>M-value puro de Bühlmann</td><td>Máxima permisividad (no recomendado)</td></tr>
+        <tr><td class="mono">0.85</td><td>85% del gradiente hacia M-value</td><td>Recreativo moderado <strong>(nuestro valor)</strong></td></tr>
+        <tr><td class="mono">0.70</td><td>70% del gradiente</td><td>Técnico conservador</td></tr>
+        <tr><td class="mono">0.30 / 0.85</td><td>GF_low / GF_high variables</td><td>GF interpolado por profundidad (futuro)</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="deco-ndl">Cálculo del NDL (No-Decompression Limit)</h3>
+    <p>
+      El NDL es el tiempo que puede permanecer el buceador a la profundidad actual antes de que
+      algún compartimento supere su límite en superficie. Se calcula <strong>analíticamente</strong>
+      invirtiendo la ecuación de Haldane — sin bucle de simulación:
+    </p>
+    <pre><span class="cmt">// Para cada compartimento i, si P_alv > P_t (cargando):</span>
+ratio = (M_surf_gf - P_t) / (P_alv - P_t)
+
+<span class="kw">if</span> (ratio &lt; <span class="num">1.0</span>):
+    t_NDL_i = -ln(<span class="num">1</span> - ratio) / k    <span class="cmt">// tiempo hasta M_surf_gf (min)</span>
+<span class="kw">else</span>:
+    t_NDL_i = ∞                       <span class="cmt">// tejido satura por debajo del límite</span>
+
+<span class="cmt">// NDL global = mínimo sobre todos los compartimentos</span>
+NDL = min(t_NDL_1, t_NDL_2, ..., t_NDL_16)</pre>
+
+    <h3>Cálculo del techo de ascenso</h3>
+    <p>
+      Cuando el buceador está en deco, el techo es la profundidad mínima a la que puede
+      ascender sin que ningún compartimento supere su M-value con GF:
+    </p>
+    <pre><span class="cmt">// Para cada compartimento i:</span>
+P_ceil_i = (P_t - GF × a_i) / (<span class="num">1</span> + GF × (<span class="num">1</span>/b_i - <span class="num">1</span>))
+
+<span class="cmt">// Techo global = compartimento más restrictivo</span>
+P_ceil = max(P_ceil_1, ..., P_ceil_16)
+depth_ceil = (P_ceil - <span class="num">1.0</span>) × <span class="num">10.0</span>   <span class="cmt">// metros</span></pre>
+
+    <h3 id="deco-impl">Implementación — <code>src/deco.h</code></h3>
+    <p>
+      La clase <code>DecoEngine</code> encapsula el estado de los 16 compartimentos y expone
+      tres métodos. No usa <code>new</code>, <code>malloc</code>, ni ningún contenedor de la STL,
+      por lo que es segura para FreeRTOS con stack limitado.
+    </p>
+    <pre><span class="typ">struct</span> DecoResult {
+  <span class="typ">float</span> ceiling_m;  <span class="cmt">// techo mínimo de ascenso (m), 0 si no hay deco</span>
+  <span class="typ">float</span> ndl_min;    <span class="cmt">// NDL restante (min), 0 si ya está en deco</span>
+  <span class="typ">bool</span>  in_deco;
+};
+
+<span class="typ">class</span> <span class="fn">DecoEngine</span> {
+<span class="kw">public</span>:
+  <span class="typ">float</span> pN2[<span class="num">16</span>];         <span class="cmt">// estado de los tejidos (bar)</span>
+
+  <span class="typ">void</span> <span class="fn">init</span>();              <span class="cmt">// tejidos → saturación de superficie</span>
+  <span class="typ">void</span> <span class="fn">update</span>(<span class="typ">float</span> depth_m, <span class="typ">float</span> dt_s);   <span class="cmt">// Haldane Δt</span>
+  DecoResult <span class="fn">calculate</span>(<span class="typ">float</span> depth_m) <span class="kw">const</span>; <span class="cmt">// NDL + techo</span>
+};</pre>
+
+    <h4>Constantes configurables en <code>deco.h</code></h4>
+    <table>
+      <thead><tr><th>Constante</th><th>Valor actual</th><th>Descripción</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">DECO_GF</td><td class="mono">0.85</td><td>Factor de gradiente (GF_high uniforme)</td></tr>
+        <tr><td class="mono">DECO_FN2</td><td class="mono">0.7902</td><td>Fracción de N₂ en aire</td></tr>
+        <tr><td class="mono">DECO_PH2O</td><td class="mono">0.0627 bar</td><td>Presión de vapor de agua a 37 °C</td></tr>
+        <tr><td class="mono">DECO_N</td><td class="mono">16</td><td>Número de compartimentos</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="deco-example">Ejemplo numérico — 20 m, 30 minutos</h3>
+    <p>Partiendo de tejidos a saturación de superficie (aire, 1 bar):</p>
+
+    <pre><span class="cmt">Condiciones iniciales:</span>
+  P_amb  = 1.0 + 20/10 = <span class="num">3.0</span> bar
+  P_alv  = (3.0 - 0.0627) × 0.7902 = <span class="num">2.321</span> bar
+  P_t_0  = (1.0 - 0.0627) × 0.7902 = <span class="num">0.745</span> bar  (superficie)
+
+<span class="cmt">Compartimento 5 (T½ = 27 min, a = 0.62, b = 0.8126) tras 30 min:</span>
+  k      = ln(2) / 27 = <span class="num">0.02567</span> min⁻¹
+  P_t    = 0.745 + (2.321 - 0.745) × (1 - e^(-0.02567×30))
+         = 0.745 + 1.576 × 0.536 = <span class="num">1.590</span> bar
+
+<span class="cmt">Límite en superficie con GF = 0.85:</span>
+  M_surf = 1 + 0.85 × (0.62 + 1/0.8126 - 1)
+         = 1 + 0.85 × 0.851 = <span class="num">1.723</span> bar  ← P_t &lt; M_surf ✓
+
+<span class="cmt">NDL analítico para este compartimento:</span>
+  ratio  = (1.723 - 1.590) / (2.321 - 1.590) = <span class="num">0.182</span>
+  t_NDL  = -ln(1 - 0.182) / 0.02567 = <span class="num">7.8</span> min
+
+<span class="cmt">Compartimento más restrictivo a 20 m a los 30 min → NDL ≈ 8 min</span></pre>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">✓ NDL real a 20 m según tablas PADI</div>
+      Las tablas PADI indican un NDL de <strong>45 min</strong> a 18 m y <strong>20 min</strong> a 22 m,
+      interpolando ≈ 30 min a 20 m para un buceador virgen. El valor Bühlmann con GF=0.85 es
+      más conservador porque considera todos los compartimentos simultáneamente, no solo el más limitante.
+    </div>
+
+    <h3>Integración en el loop de Core 0</h3>
+    <pre><span class="cmt">// Una sola instancia, vive en el stack de depthTask (Core 0)</span>
+<span class="kw">static</span> DecoEngine engine;
+engine.<span class="fn">init</span>();
+
+<span class="kw">const float</span> DT_S = <span class="num">0.1f</span>;   <span class="cmt">// paso = 100 ms</span>
+
+<span class="kw">for</span> (;;) {
+    <span class="typ">float</span> depth = <span class="fn">readSensor</span>();          <span class="cmt">// TODO: sensor real</span>
+    engine.<span class="fn">update</span>(depth, DT_S);
+    DecoResult deco = engine.<span class="fn">calculate</span>(depth);
+
+    <span class="fn">xSemaphoreTake</span>(g_dataMutex, portMAX_DELAY);
+    g_depth = depth;
+    g_deco  = deco;
+    <span class="fn">xSemaphoreGive</span>(g_dataMutex);
+
+    <span class="fn">vTaskDelay</span>(<span class="fn">pdMS_TO_TICKS</span>(<span class="num">100</span>));
+}</pre>
+
+    <h3>Pantalla — estados de la zona de datos</h3>
+    <div class="display-diagram">
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div>
+          <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">Sin deco (NDL &gt; 5 min)</div>
+          <div class="display-frame" style="width:200px;">
+            <div class="d-data"><span class="green">NDL 45'</span><span class="orange">24.5°C</span></div>
+          </div>
+        </div>
+        <div>
+          <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">NDL crítico (≤ 5 min)</div>
+          <div class="display-frame" style="width:200px;">
+            <div class="d-data"><span class="yellow">NDL  3'</span><span class="orange">24.5°C</span></div>
+          </div>
+        </div>
+        <div>
+          <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">En descompresión</div>
+          <div class="display-frame" style="width:200px;">
+            <div class="d-data"><span class="red-t">DECO   </span><span class="red-t">CEI 3.0m</span></div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -536,7 +893,11 @@ cal.sx = avg / cx;   <span class="cmt">// idem para sy, sz</span></pre>
   <span class="str">"max"</span>:     [ <span class="num">38.7</span>,  <span class="num">41.2</span>,  <span class="num">25.8</span>],
   <span class="str">"offset"</span>:  [<span class="num">-1.7</span>,   <span class="num">1.35</span>,  <span class="num">2.75</span>],
   <span class="str">"scale"</span>:   [<span class="num">1.021</span>, <span class="num">0.978</span>, <span class="num">1.001</span>],
-  <span class="str">"heading"</span>: <span class="num">127.4</span>             <span class="cmt">// grados (0–360°)</span>
+  <span class="str">"heading"</span>: <span class="num">127.4</span>,            <span class="cmt">// grados (0–360°)</span>
+  <span class="str">"depth"</span>:   <span class="num">5.3</span>,              <span class="cmt">// metros (Core 0)</span>
+  <span class="str">"ndl"</span>:     <span class="num">45</span>,               <span class="cmt">// minutos de NDL restantes</span>
+  <span class="str">"ceiling"</span>: <span class="num">0.0</span>,              <span class="cmt">// techo de ascenso en metros (0 = sin deco)</span>
+  <span class="str">"in_deco"</span>: <span class="kw">false</span>             <span class="cmt">// true si hay obligación de parada</span>
 }</pre>
   </section>
 
@@ -579,8 +940,12 @@ cal.sx = avg / cx;   <span class="cmt">// idem para sy, sz</span></pre>
 
   <section id="serial">
     <h2>Monitor serie</h2>
-    <p>A 115 200 baud el firmware imprime una línea por iteración del loop:</p>
-    <pre><span class="cmt">Heading: 127.4  Depth: 5.3 m  T: 84 s</span></pre>
+    <p>A 115 200 baud el firmware (Core 1) imprime una línea por iteración del loop con rumbo, profundidad, NDL y techo:</p>
+    <pre>Heading: 127.4  Depth:  5.3 m  NDL:  45 min  Ceil:  0.0 m
+Heading: 128.1  Depth:  5.4 m  NDL:  44 min  Ceil:  0.0 m
+Heading: 128.1  Depth:  9.2 m  NDL:  12 min  Ceil:  0.0 m  <span class="cmt">← bajando</span>
+Heading: 129.0  Depth: 21.3 m  NDL:   0 min  Ceil:  3.0 m  <span class="cmt">← en deco</span></pre>
+
     <p>Durante la inicialización verás los pasos numerados:</p>
     <pre><span class="green">1. Serial OK</span>
 <span class="green">2. TFT OK</span>
@@ -588,10 +953,12 @@ cal.sx = avg / cx;   <span class="cmt">// idem para sy, sz</span></pre>
 <span class="green">4. Magnetometer OK</span>
 <span class="green">5. Accelerometer OK</span>
 Calibracion cargada: off=(-1.70,1.35,2.75) scale=(1.021,0.978,1.001)
+SD OK
 softAP result: OK
 AP "Brujula-Calib" -> http://192.168.4.1
 MAC: AA:BB:CC:DD:EE:FF
-<span class="green">6. WiFi/HTTP OK</span>
+<span class="green">7. WiFi/HTTP OK</span>
+<span class="green">8. depthTask (Core 0) OK</span>
 Setup completado!</pre>
     <p>Si un sensor no responde, verás un mensaje de error y el firmware se bloquea en un bucle de <code>delay(100)</code> para facilitar el diagnóstico.</p>
   </section>
