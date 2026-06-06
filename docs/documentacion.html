@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DiveComputer – Documentación</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0D1117; --surface: #161B22; --surface2: #1C2430;
+      --border: #30363D; --text: #C9D1D9; --muted: #6E7681;
+      --accent: #58A6FF; --green: #3FB950; --orange: #F0883E;
+      --yellow: #D29922; --red: #F85149; --purple: #BC8CFF;
+    }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.7; display: flex; }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 240px; min-width: 240px; height: 100vh; position: sticky; top: 0;
+      border-right: 1px solid var(--border); background: var(--surface);
+      padding: 24px 0; overflow-y: auto; display: flex; flex-direction: column;
+    }
+    .sidebar-logo { padding: 0 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+    .sidebar-logo a { text-decoration: none; color: var(--text); font-weight: 600; font-size: 15px; }
+    .sidebar-logo p { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .nav-group { padding: 4px 0 8px; }
+    .nav-group-label { padding: 6px 20px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .nav-link { display: block; padding: 5px 20px; font-size: 13px; color: var(--muted); text-decoration: none; border-left: 2px solid transparent; transition: all 0.12s; }
+    .nav-link:hover { color: var(--text); background: #21262D; }
+    .nav-link.active { color: var(--accent); border-left-color: var(--accent); background: #152030; }
+    .sidebar-footer { margin-top: auto; padding: 16px 20px 0; border-top: 1px solid var(--border); }
+    .sidebar-footer a { font-size: 12px; color: var(--muted); text-decoration: none; display: block; padding: 4px 0; }
+    .sidebar-footer a:hover { color: var(--accent); }
+
+    /* ── MAIN CONTENT ── */
+    .content { flex: 1; min-width: 0; padding: 40px 48px; max-width: 860px; }
+    @media (max-width: 860px) { .sidebar { display: none; } .content { padding: 24px 20px; } }
+
+    /* ── TYPOGRAPHY ── */
+    h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+    h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 16px; font-weight: 600; margin: 28px 0 10px; color: var(--text); }
+    h4 { font-size: 14px; font-weight: 600; margin: 20px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+    p { margin-bottom: 14px; color: var(--text); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    strong { color: #E6EDF3; font-weight: 600; }
+
+    /* ── LEAD / INTRO ── */
+    .lead { font-size: 16px; color: var(--muted); margin-bottom: 28px; line-height: 1.6; }
+    .page-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 32px; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid; }
+
+    /* ── CALLOUTS ── */
+    .callout { border-radius: 8px; padding: 14px 16px; margin: 20px 0; border-left: 4px solid; font-size: 14px; }
+    .callout-info  { background: #152030; border-color: var(--accent); }
+    .callout-tip   { background: #122118; border-color: var(--green); }
+    .callout-warn  { background: #201a0e; border-color: var(--orange); }
+    .callout-title { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
+    .callout-info  .callout-title { color: var(--accent); }
+    .callout-tip   .callout-title { color: var(--green); }
+    .callout-warn  .callout-title { color: var(--orange); }
+
+    /* ── CODE ── */
+    pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; overflow-x: auto; margin: 16px 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
+    pre code { background: none; border: none; padding: 0; font-size: 13px; }
+
+    /* syntax highlights */
+    .kw  { color: #FF7B72; } /* keywords */
+    .fn  { color: #D2A8FF; } /* functions */
+    .str { color: #A5D6FF; } /* strings */
+    .num { color: #79C0FF; } /* numbers */
+    .cmt { color: #6E7681; font-style: italic; } /* comments */
+    .typ { color: #FFA657; } /* types */
+
+    /* ── TABLES ── */
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+    thead th { background: var(--surface); border: 1px solid var(--border); padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 700; }
+    tbody td { border: 1px solid var(--border); padding: 8px 12px; }
+    tbody tr:hover { background: var(--surface); }
+    .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+    /* ── STEPS ── */
+    .steps { list-style: none; counter-reset: step; margin: 16px 0; }
+    .steps li { counter-increment: step; padding: 14px 16px 14px 56px; position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
+    .steps li::before { content: counter(step); position: absolute; left: 16px; top: 14px; width: 26px; height: 26px; background: #152030; color: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 1px solid var(--accent); }
+
+    /* ── DISPLAY LAYOUT DIAGRAM ── */
+    .display-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin: 16px 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .display-frame { border: 2px solid #30363D; border-radius: 4px; width: 320px; overflow: hidden; }
+    .d-strip  { border-bottom: 1px solid #30363D; padding: 4px 8px; font-size: 11px; }
+    .d-depth  { border-bottom: 1px solid #30363D; padding: 10px 8px; text-align: center; }
+    .d-data   { border-bottom: 1px solid #30363D; padding: 4px 8px; display: flex; justify-content: space-between; font-size: 11px; }
+    .d-compass { padding: 6px 8px; text-align: center; font-size: 11px; }
+    .cyan   { color: #00B8D9; } .white { color: #E6EDF3; }
+    .green  { color: #3FB950; } .yellow { color: #D29922; }
+    .orange { color: #F0883E; } .red-t  { color: #F85149; }
+
+    /* ── GRID CARDS ── */
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 16px 0; }
+    .info-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .info-card h4 { margin: 0 0 6px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; }
+    .info-card .value { font-size: 18px; font-weight: 600; color: var(--text); }
+    .info-card p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+
+    /* ── API ENDPOINT STYLE ── */
+    .endpoint { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 10px 0; display: flex; align-items: center; gap: 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+    .method { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .get  { background: #122118; color: var(--green); border: 1px solid #2ea043; }
+    .post { background: #152030; color: var(--accent); border: 1px solid #388bfd; }
+
+    /* section anchor helpers */
+    section { scroll-margin-top: 24px; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+  </style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ── -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <a href="index.html">🧭 DiveComputer</a>
+    <p>ESP32 · Firmware docs</p>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Inicio</div>
+    <a class="nav-link" href="#overview">Descripción general</a>
+    <a class="nav-link" href="#hardware">Hardware</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Montaje</div>
+    <a class="nav-link" href="#bom">Lista de materiales</a>
+    <a class="nav-link" href="#wiring">Conexiones</a>
+    <a class="nav-link" href="#power">Alimentación</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Firmware</div>
+    <a class="nav-link" href="#build">Compilar y flashear</a>
+    <a class="nav-link" href="#architecture">Arquitectura</a>
+    <a class="nav-link" href="#display">Pantalla TFT</a>
+    <a class="nav-link" href="#heading">Algoritmo de rumbo</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Calibración</div>
+    <a class="nav-link" href="#wifi-portal">Portal WiFi</a>
+    <a class="nav-link" href="#calibration-steps">Procedimiento</a>
+    <a class="nav-link" href="#api">API HTTP</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Referencia</div>
+    <a class="nav-link" href="#config">Configuración</a>
+    <a class="nav-link" href="#serial">Monitor serie</a>
+  </div>
+
+  <div class="sidebar-footer">
+    <a href="pin-diagram.html">🔌 Diagrama de pines</a>
+    <a href="https://github.com/antoni-heredia/DiveComputer" target="_blank">💻 GitHub</a>
+    <a href="index.html">← Inicio</a>
+  </div>
+</nav>
+
+<!-- ── MAIN CONTENT ── -->
+<main class="content">
+
+  <!-- ═══ HEADER ═══ -->
+  <section id="overview">
+    <h1>DiveComputer — Documentación</h1>
+    <p class="lead">
+      Ordenador de buceo de código abierto basado en ESP32. Muestra rumbo compensado por inclinación,
+      profundidad y tiempo de inmersión en un display TFT de 1.8". Incluye portal WiFi para calibración
+      del magnetómetro sin necesidad de herramientas adicionales.
+    </p>
+
+    <div class="page-meta">
+      <span class="badge" style="color:#3FB950;border-color:#2ea043;background:#122118;">● Activo</span>
+      <span class="badge" style="color:#58A6FF;border-color:#388bfd;background:#152030;">PlatformIO</span>
+      <span class="badge" style="color:#FFA657;border-color:#D1742F;background:#1e1408;">ESP32-C3 / S3</span>
+      <span class="badge" style="color:#BC8CFF;border-color:#8B4FD8;background:#1a1228;">Arduino Framework</span>
+    </div>
+
+    <div class="card-grid">
+      <div class="info-card">
+        <h4>MCU principal</h4>
+        <div class="value">ESP32-C3</div>
+        <p>DevKitC-02 · RISC-V · WiFi/BLE integrado</p>
+      </div>
+      <div class="info-card">
+        <h4>Pantalla</h4>
+        <div class="value">ST7735</div>
+        <p>1.8" TFT · 128×160 px · SPI 27 MHz</p>
+      </div>
+      <div class="info-card">
+        <h4>Magnetómetro</h4>
+        <div class="value">HMC5883L</div>
+        <p>3 ejes · I²C 0x1E · ±8 Gauss</p>
+      </div>
+      <div class="info-card">
+        <h4>Acelerómetro</h4>
+        <div class="value">LSM303</div>
+        <p>3 ejes · I²C 0x18 · compensación tilt</p>
+      </div>
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ═══ HARDWARE ═══ -->
+  <section id="hardware">
+    <h2>Hardware</h2>
+
+    <h3 id="bom">Lista de materiales</h3>
+    <table>
+      <thead>
+        <tr><th>Componente</th><th>Modelo</th><th>Protocolo</th><th>Tensión</th><th>Aprox. precio</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Microcontrolador</td><td class="mono">ESP32-C3-DevKitC-02</td><td>—</td><td>3.3 V / 5 V USB</td><td>~5 €</td></tr>
+        <tr><td>Display TFT</td><td class="mono">ST7735R 1.8"</td><td>SPI</td><td>3.3 V</td><td>~4 €</td></tr>
+        <tr><td>Magnetómetro</td><td class="mono">HMC5883L (GY-273)</td><td>I²C</td><td>3.3 V</td><td>~2 €</td></tr>
+        <tr><td>Acelerómetro</td><td class="mono">LSM303DLHC</td><td>I²C</td><td>3.3 V</td><td>~4 €</td></tr>
+        <tr><td>Cables y protoboard</td><td>—</td><td>—</td><td>—</td><td>~2 €</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">✓ Compatible con ESP32-S3</div>
+      El firmware soporta también el ESP32-S3-DevKitC-1 con pines distintos. Consulta el
+      <a href="pin-diagram.html">diagrama de pines</a> y selecciona el entorno <code>esp32-s3-devkitc-1</code>
+      en PlatformIO.
+    </div>
+
+    <h3 id="wiring">Conexiones de pines — ESP32-C3</h3>
+
+    <table>
+      <thead>
+        <tr><th>GPIO</th><th>Bus</th><th>Señal</th><th>Periférico</th><th>Notas</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono" style="color:#FF9800;">GPIO 0</td><td>SPI</td><td>RST</td><td>ST7735 TFT</td><td>Reset activo bajo</td></tr>
+        <tr><td class="mono" style="color:#FF9800;">GPIO 1</td><td>SPI</td><td>DC</td><td>ST7735 TFT</td><td>Data / Command</td></tr>
+        <tr><td class="mono" style="color:#FF9800;">GPIO 2</td><td>SPI</td><td>CS</td><td>ST7735 TFT</td><td>Chip Select</td></tr>
+        <tr><td class="mono" style="color:#4CAF50;">GPIO 6</td><td>I²C</td><td>SDA</td><td>HMC5883L + LSM303</td><td>Bus compartido</td></tr>
+        <tr><td class="mono" style="color:#2196F3;">GPIO 7</td><td>I²C</td><td>SCL</td><td>HMC5883L + LSM303</td><td>Bus compartido</td></tr>
+        <tr><td class="mono" style="color:#FF9800;">GPIO 8</td><td>SPI</td><td>MOSI</td><td>ST7735 TFT</td><td>SPI Data Out</td></tr>
+        <tr><td class="mono" style="color:#FF9800;">GPIO 9</td><td>SPI</td><td>SCLK</td><td>ST7735 TFT</td><td>SPI Clock 27 MHz</td></tr>
+        <tr><td class="mono" style="color:#F44336;">3.3V</td><td>—</td><td>VCC</td><td>TFT · HMC5883L · LSM303</td><td>Alimentación todos</td></tr>
+        <tr><td class="mono" style="color:#8B949E;">GND</td><td>—</td><td>GND</td><td>TFT · HMC5883L · LSM303</td><td>Masa común</td></tr>
+      </tbody>
+    </table>
+
+    <p>Ver el <a href="pin-diagram.html">diagrama de pines interactivo</a> para la representación visual del cableado.</p>
+
+    <h3 id="power">Alimentación</h3>
+    <p>
+      El ESP32-C3-DevKitC-02 se alimenta por <strong>USB-C a 5 V</strong> y dispone de un regulador interno que
+      genera <strong>3.3 V</strong> para todos los periféricos. No se necesita regulador externo.
+    </p>
+
+    <div class="callout callout-warn">
+      <div class="callout-title">⚠ Tensiones lógicas</div>
+      El ESP32-C3 opera a 3.3 V. El ST7735, HMC5883L y LSM303 también funcionan a 3.3 V.
+      <strong>No conectes directamente señales de 5 V</strong> a ninguno de estos pines.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ═══ FIRMWARE ═══ -->
+  <section id="build">
+    <h2>Compilar y flashear</h2>
+
+    <h3>Requisitos</h3>
+    <ul style="padding-left:20px;margin-bottom:16px;line-height:2.2;">
+      <li><a href="https://platformio.org" target="_blank">PlatformIO</a> (extensión VS Code recomendada)</li>
+      <li>Driver USB-CDC — en Windows puede requerir reinicio tras conectar por primera vez</li>
+      <li>Python 3.8+ (gestionado automáticamente por PlatformIO)</li>
+    </ul>
+
+    <h3>Comandos habituales</h3>
+    <pre><span class="cmt"># Compilar</span>
+pio run
+
+<span class="cmt"># Compilar y flashear (ESP32-C3, entorno por defecto)</span>
+pio run --target upload
+
+<span class="cmt"># Flashear entorno ESP32-S3</span>
+pio run -e esp32-s3-devkitc-1 --target upload
+
+<span class="cmt"># Abrir monitor serie (115 200 baud)</span>
+pio device monitor
+
+<span class="cmt"># Flash + monitor en un solo comando</span>
+pio run --target upload && pio device monitor
+
+<span class="cmt"># Limpiar artefactos de compilación</span>
+pio run --target clean</pre>
+
+    <div class="callout callout-info">
+      <div class="callout-title">ℹ USB CDC</div>
+      El firmware habilita <code>ARDUINO_USB_CDC_ON_BOOT=1</code>. El monitor serie aparece como puerto virtual
+      tras la enumeración USB; si no aparece, desconecta y reconecta el cable.
+    </div>
+  </section>
+
+  <!-- ═══ ARQUITECTURA ═══ -->
+  <section id="architecture">
+    <h2>Arquitectura del firmware</h2>
+    <p>Todo el código reside en <code>src/main.cpp</code>. No hay módulos separados.</p>
+
+    <h3>Orden de inicialización (<code>setup()</code>)</h3>
+    <ol class="steps">
+      <li><strong>Serial</strong> — USB CDC a 115 200 baud. Espera hasta 2 s a la enumeración USB.</li>
+      <li><strong>TFT</strong> — <code>SPI.begin(9,−1,8)</code> → <code>tft.initR(INITR_BLACKTAB)</code> → rotación landscape → splash screen.</li>
+      <li><strong>I²C</strong> — <code>Wire.begin(I2C_SDA, I2C_SCL)</code> con los pines definidos en <code>platformio.ini</code>.</li>
+      <li><strong>HMC5883L</strong> — <code>mag.begin()</code>. Bucle infinito si el sensor no responde.</li>
+      <li><strong>LSM303</strong> — <code>accel.begin(0x18)</code>. SA0=GND → dirección <code>0x18</code>.</li>
+      <li><strong>Preferencias</strong> — Carga calibración almacenada en flash NVS (<code>namespace "compass"</code>).</li>
+      <li><strong>WiFi AP</strong> — Punto de acceso <em>Brujula-Calib</em> en canal 1 + servidor HTTP en puerto 80.</li>
+    </ol>
+
+    <h3>Bucle principal (<code>loop()</code> — cada 30 ms)</h3>
+    <pre><span class="fn">server</span>.handleClient();            <span class="cmt">// procesa peticiones HTTP del portal</span>
+
+accel.<span class="fn">getEvent</span>(&accEv);            <span class="cmt">// leer acelerómetro</span>
+mag.<span class="fn">getEvent</span>(&magEv);              <span class="cmt">// leer magnetómetro</span>
+
+<span class="kw">if</span> (calState.collecting)
+    <span class="fn">updateCalibrationSamples</span>(magEv); <span class="cmt">// acumular min/max hard-iron</span>
+
+<span class="typ">float</span> heading = <span class="fn">calculateHeading</span>(magEv, accEv);
+g_heading = heading;              <span class="cmt">// disponible para el portal vía /status</span>
+
+<span class="fn">drawHeadingStrip</span>(heading);        <span class="cmt">// redibuja si cambió ≥1°</span>
+<span class="fn">drawDepth</span>(g_depth);              <span class="cmt">// redibuja si cambió ≥0.1 m</span>
+<span class="fn">drawDiveData</span>(g_tempC, elapsed);   <span class="cmt">// redibuja si cambió el segundo</span>
+<span class="kw">if</span> (hdgChanged) <span class="fn">drawCompassBar</span>(heading);
+
+delay(<span class="num">30</span>);</pre>
+  </section>
+
+  <!-- ═══ PANTALLA ═══ -->
+  <section id="display">
+    <h2>Pantalla TFT — layout</h2>
+    <p>
+      El display se configura en modo <strong>landscape 160×128 px</strong> (<code>setRotation(1)</code>).
+      La pantalla se divide en cuatro zonas de redibujado selectivo:
+    </p>
+
+    <div class="display-diagram">
+      <div style="margin-bottom:12px;color:var(--muted);font-size:11px;">Simulación del display (160×128 px)</div>
+      <div class="display-frame">
+        <div class="d-strip">
+          <span class="cyan">127°</span>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          <span class="white" style="font-size:13px;"><strong>SE</strong></span>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          <span style="font-size:10px;color:var(--muted);">y=0..15 • 16 px</span>
+        </div>
+        <div class="d-depth" style="min-height:62px;">
+          <div style="font-size:10px;color:var(--muted);text-align:left;">PROF</div>
+          <div style="font-size:28px;color:#3FB950;font-family:'JetBrains Mono',monospace;"> 5.3<span style="font-size:16px;">m</span></div>
+          <div style="font-size:10px;color:var(--muted);">y=16..77 • 62 px</div>
+        </div>
+        <div class="d-data">
+          <span class="yellow">T 01:24</span>
+          <span style="color:var(--muted);font-size:10px;">y=78..95 • 18 px</span>
+          <span class="orange">24.5°C</span>
+        </div>
+        <div class="d-compass">
+          <span style="color:var(--muted);font-size:10px;">y=96..127 • 32 px</span><br>
+          <span class="red-t">▼</span>&nbsp;
+          <span class="white">·&nbsp;·&nbsp;&nbsp;N&nbsp;&nbsp;·&nbsp;·&nbsp;&nbsp;</span>
+          <span class="cyan">E</span>
+          <span class="white">&nbsp;·&nbsp;·&nbsp;&nbsp;</span>
+        </div>
+      </div>
+    </div>
+
+    <table style="margin-top:16px;">
+      <thead>
+        <tr><th>Zona</th><th>Y (px)</th><th>Contenido</th><th>Se redibuja cuando…</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Heading strip</td><td class="mono">0–15</td><td>Grados + cardinal grande</td><td>Rumbo cambia ≥1°</td></tr>
+        <tr><td>Profundidad</td><td class="mono">16–77</td><td>Metros (textSize=4)</td><td>Profundidad cambia ≥0.1 m</td></tr>
+        <tr><td>Datos</td><td class="mono">78–95</td><td>Tiempo inmersión + temperatura</td><td>Nuevo segundo / nuevo valor</td></tr>
+        <tr><td>Barra brújula</td><td class="mono">96–127</td><td>Rosa de los vientos 90° FOV</td><td>Rumbo cambia ≥1°</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">✓ Redibujado selectivo</div>
+      Solo se borra y redibuja la zona que ha cambiado (<code>fillRect</code> limitado).
+      Esto elimina el parpadeo sin necesidad de double-buffering.
+    </div>
+  </section>
+
+  <!-- ═══ ALGORITMO ═══ -->
+  <section id="heading">
+    <h2>Algoritmo de rumbo compensado</h2>
+    <p>
+      La función <code>calculateHeading()</code> calcula el rumbo magnético corregiendo la inclinación
+      de la placa mediante los datos del acelerómetro.
+    </p>
+
+    <h3>Remapeo de ejes (montaje físico)</h3>
+    <p>
+      El sensor está montado con <strong>X hacia abajo, Y hacia la izquierda, Z hacia adelante</strong>.
+      Se remapea al marco de la fórmula (X=adelante, Y=izquierda, Z=arriba):
+    </p>
+    <pre><span class="cmt">// Acelerómetro → marco fórmula</span>
+ax = -accEvent.acceleration.z;
+ay =  accEvent.acceleration.y;
+az = -accEvent.acceleration.x;
+
+<span class="cmt">// Magnetómetro + calibración → marco fórmula</span>
+mx = -(magEvent.magnetic.z - cal.oz) * cal.sz;
+my =  (magEvent.magnetic.y - cal.oy) * cal.sy;
+mz = -(magEvent.magnetic.x - cal.ox) * cal.sx;</pre>
+
+    <h3>Compensación de inclinación (tilt compensation)</h3>
+    <pre><span class="cmt">// Pitch y roll del acelerómetro</span>
+pitch = atan2(-ax, sqrt(ay*ay + az*az));
+roll  = atan2(ay, az);
+
+<span class="cmt">// Componentes horizontales del campo magnético</span>
+Xh = mx*cos(pitch) + mz*sin(pitch);
+Yh = mx*sin(roll)*sin(pitch) + my*cos(roll) - mz*sin(roll)*cos(pitch);
+
+<span class="cmt">// Rumbo + declinación magnética (Alcalá la Real ≈ −0.63°)</span>
+heading = atan2(Yh, Xh) + (-0.011);   <span class="cmt">// rad</span>
+heading = fmod(heading + 2*PI, 2*PI) * 180.0 / PI;  <span class="cmt">// → 0..360°</span></pre>
+
+    <div class="callout callout-info">
+      <div class="callout-title">ℹ Declinación magnética</div>
+      El valor <code>−0.011 rad</code> (≈ −0.63°) está ajustado para <strong>Alcalá la Real, España</strong>.
+      Para otra ubicación, calcula tu valor en
+      <a href="https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml" target="_blank">NOAA Magnetic Field Calculator</a>
+      y actualiza la constante <code>declinationAngle</code> en <code>calculateHeading()</code>.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ═══ CALIBRACIÓN ═══ -->
+  <section id="wifi-portal">
+    <h2>Portal de calibración WiFi</h2>
+    <p>
+      Tras arrancar, el ESP32 levanta un <strong>punto de acceso WiFi abierto</strong>.
+      Conéctate desde cualquier dispositivo y abre el portal para calibrar el magnetómetro
+      sin desmontar ni reconectar nada.
+    </p>
+
+    <div class="card-grid">
+      <div class="info-card">
+        <h4>SSID</h4>
+        <div class="value mono" style="font-size:15px;">Brujula-Calib</div>
+        <p>Red abierta (sin contraseña por defecto)</p>
+      </div>
+      <div class="info-card">
+        <h4>Dirección IP</h4>
+        <div class="value mono" style="font-size:15px;">192.168.4.1</div>
+        <p>Abre en el navegador del móvil</p>
+      </div>
+      <div class="info-card">
+        <h4>Persistencia</h4>
+        <div class="value">NVS Flash</div>
+        <p>Calibración guardada entre reinicios</p>
+      </div>
+    </div>
+
+    <h3 id="calibration-steps">Procedimiento de calibración</h3>
+    <ol class="steps">
+      <li>
+        <strong>Conecta al punto de acceso</strong> — busca <em>Brujula-Calib</em> en la lista WiFi de tu móvil y conéctate.
+      </li>
+      <li>
+        <strong>Abre el portal</strong> — navega a <code>http://192.168.4.1</code> en el navegador.
+        Verás el rumbo actual en tiempo real.
+      </li>
+      <li>
+        <strong>Inicia la calibración</strong> — pulsa <em>"Iniciar calibración"</em>.
+        El estado cambia a <em style="color:var(--orange);">calibrating</em>.
+      </li>
+      <li>
+        <strong>Mueve el dispositivo</strong> — dibuja un "8" en el aire durante 20–30 s,
+        cubriendo todas las orientaciones posibles (inclina, gira, voltea).
+        Observa cómo aumentan las muestras y los valores min/max.
+      </li>
+      <li>
+        <strong>Detén y guarda</strong> — pulsa <em>"Detener y guardar"</em>.
+        El firmware calcula offsets hard-iron y escalas soft-iron automáticamente
+        y los almacena en flash NVS.
+      </li>
+    </ol>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">✓ ¿Cuántas muestras son suficientes?</div>
+      El firmware solo acepta la calibración si se han recogido <strong>más de 50 muestras</strong>.
+      Para resultados óptimos, apunta a 200–500 muestras rotando en múltiples ejes.
+    </div>
+
+    <h3>Algoritmo de calibración hard-iron + soft-iron</h3>
+    <pre><span class="cmt">// Hard-iron: offset = centro del elipsoide</span>
+cal.ox = (maxX + minX) / 2;
+cal.oy = (maxY + minY) / 2;
+cal.oz = (maxZ + minZ) / 2;
+
+<span class="cmt">// Soft-iron: escalar cada eje al radio medio</span>
+cx  = (maxX - minX) / 2;
+avg = (cx + cy + cz) / 3;
+cal.sx = avg / cx;   <span class="cmt">// idem para sy, sz</span></pre>
+  </section>
+
+  <!-- ═══ API HTTP ═══ -->
+  <section id="api">
+    <h2>API HTTP del portal</h2>
+    <p>El servidor HTTP expone estos endpoints mientras el dispositivo está encendido:</p>
+
+    <div class="endpoint"><span class="method get">GET</span><code>/</code><span style="color:var(--muted);margin-left:auto;font-size:12px;">Sirve la interfaz HTML del portal</span></div>
+    <div class="endpoint"><span class="method get">GET</span><code>/status</code><span style="color:var(--muted);margin-left:auto;font-size:12px;">Estado JSON en tiempo real</span></div>
+    <div class="endpoint"><span class="method get">GET</span><code>/start</code><span style="color:var(--muted);margin-left:auto;font-size:12px;">Inicia la toma de muestras</span></div>
+    <div class="endpoint"><span class="method get">GET</span><code>/stop</code><span style="color:var(--muted);margin-left:auto;font-size:12px;">Detiene y guarda la calibración</span></div>
+    <div class="endpoint"><span class="method get">GET</span><code>/reset</code><span style="color:var(--muted);margin-left:auto;font-size:12px;">Restablece offsets a 0, escalas a 1</span></div>
+
+    <h3>Respuesta de <code>/status</code></h3>
+    <pre>{
+  <span class="str">"state"</span>:   <span class="str">"idle"</span>,          <span class="cmt">// "idle" | "calibrating"</span>
+  <span class="str">"samples"</span>: <span class="num">347</span>,
+  <span class="str">"min"</span>:     [<span class="num">-42.1</span>, <span class="num">-38.5</span>, <span class="num">-20.3</span>],
+  <span class="str">"max"</span>:     [ <span class="num">38.7</span>,  <span class="num">41.2</span>,  <span class="num">25.8</span>],
+  <span class="str">"offset"</span>:  [<span class="num">-1.7</span>,   <span class="num">1.35</span>,  <span class="num">2.75</span>],
+  <span class="str">"scale"</span>:   [<span class="num">1.021</span>, <span class="num">0.978</span>, <span class="num">1.001</span>],
+  <span class="str">"heading"</span>: <span class="num">127.4</span>             <span class="cmt">// grados (0–360°)</span>
+}</pre>
+  </section>
+
+  <hr>
+
+  <!-- ═══ REFERENCIA ═══ -->
+  <section id="config">
+    <h2>Referencia de configuración</h2>
+    <p>Todas las constantes de pines y opciones de build se definen en <code>platformio.ini</code>
+    como <code>build_flags</code>. No modifiques los <code>#define</code> en <code>main.cpp</code>
+    directamente; los flags del compilador tienen prioridad.</p>
+
+    <table>
+      <thead>
+        <tr><th>Flag</th><th>ESP32-C3 valor</th><th>ESP32-S3 valor</th><th>Descripción</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">TFT_RST</td><td class="mono">0</td><td class="mono">9</td><td>GPIO Reset del TFT</td></tr>
+        <tr><td class="mono">TFT_DC</td><td class="mono">1</td><td class="mono">10</td><td>GPIO Data/Command</td></tr>
+        <tr><td class="mono">TFT_CS</td><td class="mono">2</td><td class="mono">11</td><td>GPIO Chip Select</td></tr>
+        <tr><td class="mono">TFT_MOSI</td><td class="mono">8</td><td class="mono">3</td><td>GPIO SPI MOSI</td></tr>
+        <tr><td class="mono">TFT_SCLK</td><td class="mono">9</td><td class="mono">4</td><td>GPIO SPI Clock</td></tr>
+        <tr><td class="mono">I2C_SDA</td><td class="mono">6</td><td class="mono">1</td><td>GPIO I²C SDA</td></tr>
+        <tr><td class="mono">I2C_SCL</td><td class="mono">7</td><td class="mono">2</td><td>GPIO I²C SCL</td></tr>
+        <tr><td class="mono">SPI_FREQUENCY</td><td class="mono" colspan="2">27000000</td><td>Frecuencia SPI (27 MHz)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Otras constantes en <code>main.cpp</code></h3>
+    <table>
+      <thead><tr><th>Constante</th><th>Valor por defecto</th><th>Descripción</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">AP_SSID</td><td class="mono">"Brujula-Calib"</td><td>Nombre del punto de acceso</td></tr>
+        <tr><td class="mono">AP_PASS</td><td class="mono">""</td><td>Contraseña AP (vacío = abierta)</td></tr>
+        <tr><td class="mono">declinationAngle</td><td class="mono">-0.011 rad</td><td>Declinación magnética local</td></tr>
+        <tr><td class="mono">delay(30)</td><td class="mono">30 ms</td><td>Periodo del loop (~33 Hz)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="serial">
+    <h2>Monitor serie</h2>
+    <p>A 115 200 baud el firmware imprime una línea por iteración del loop:</p>
+    <pre><span class="cmt">Heading: 127.4  Depth: 5.3 m  T: 84 s</span></pre>
+    <p>Durante la inicialización verás los pasos numerados:</p>
+    <pre><span class="green">1. Serial OK</span>
+<span class="green">2. TFT OK</span>
+<span class="green">3. Wire (I2C) OK</span>
+<span class="green">4. Magnetometer OK</span>
+<span class="green">5. Accelerometer OK</span>
+Calibracion cargada: off=(-1.70,1.35,2.75) scale=(1.021,0.978,1.001)
+softAP result: OK
+AP "Brujula-Calib" -> http://192.168.4.1
+MAC: AA:BB:CC:DD:EE:FF
+<span class="green">6. WiFi/HTTP OK</span>
+Setup completado!</pre>
+    <p>Si un sensor no responde, verás un mensaje de error y el firmware se bloquea en un bucle de <code>delay(100)</code> para facilitar el diagnóstico.</p>
+  </section>
+
+  <hr>
+  <p style="color:var(--muted);font-size:12px;text-align:center;padding-bottom:16px;">
+    DiveComputer · Antoni Heredia · 2026 ·
+    <a href="https://github.com/antoni-heredia/DiveComputer" target="_blank">GitHub</a>
+  </p>
+
+</main>
+
+<script>
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('section[id], h2[id], h3[id]');
+  const links = document.querySelectorAll('.nav-link');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.nav-link[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>
