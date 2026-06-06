@@ -6,6 +6,13 @@
   <title>DiveComputer – Documentación</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    MathJax = {
+      tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], tags: 'ams' },
+      options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -113,6 +120,15 @@
     .get  { background: #122118; color: var(--green); border: 1px solid #2ea043; }
     .post { background: #152030; color: var(--accent); border: 1px solid #388bfd; }
 
+    /* ── MATH BLOCKS ── */
+    .math-block {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 18px 24px; margin: 14px 0; overflow-x: auto; font-size: 15px; line-height: 2;
+    }
+    .math-block p { margin: 0 0 4px; color: var(--muted); font-size: 12px; font-style: italic; }
+    .math-inline { font-size: 14px; }
+    .MathJax { color: var(--text) !important; }
+
     /* section anchor helpers */
     section { scroll-margin-top: 24px; }
     hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
@@ -159,6 +175,12 @@
     <a class="nav-link" href="#wifi-portal">Portal WiFi</a>
     <a class="nav-link" href="#calibration-steps">Procedimiento</a>
     <a class="nav-link" href="#api">API HTTP</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Datos</div>
+    <a class="nav-link" href="#sdlog">Registro en SD</a>
+    <a class="nav-link" href="#sdlog-format">Formato CSV</a>
+    <a class="nav-link" href="#sdlog-example">Ejemplo de fichero</a>
   </div>
   <div class="nav-group">
     <div class="nav-group-label">Referencia</div>
@@ -498,6 +520,26 @@ Yh = mx*sin(roll)*sin(pitch) + my*cos(roll) - mz*sin(roll)*cos(pitch);
 heading = atan2(Yh, Xh) + (-0.011);   <span class="cmt">// rad</span>
 heading = fmod(heading + 2*PI, 2*PI) * 180.0 / PI;  <span class="cmt">// → 0..360°</span></pre>
 
+    <div class="math-block">
+      <p>Ángulos de inclinación del acelerómetro</p>
+      \[
+        \text{pitch} = \arctan2\!\left(-a_x,\; \sqrt{a_y^2 + a_z^2}\right)
+        \qquad
+        \text{roll} = \arctan2(a_y,\, a_z)
+      \]
+      <p>Componentes horizontales del campo magnético compensadas por tilt</p>
+      \[
+        X_h = m_x\cos(\text{pitch}) + m_z\sin(\text{pitch})
+      \]
+      \[
+        Y_h = m_x\sin(\text{roll})\sin(\text{pitch}) + m_y\cos(\text{roll}) - m_z\sin(\text{roll})\cos(\text{pitch})
+      \]
+      <p>Rumbo magnético con corrección de declinación \(\delta\)</p>
+      \[
+        \psi = \left[\arctan2(Y_h,\, X_h) + \delta\right] \bmod 2\pi \quad \xrightarrow{\times\frac{180}{\pi}} \quad [0°,\, 360°)
+      \]
+    </div>
+
     <div class="callout callout-info">
       <div class="callout-title">ℹ Declinación magnética</div>
       El valor <code>−0.011 rad</code> (≈ −0.63°) está ajustado para <strong>Alcalá la Real, España</strong>.
@@ -627,6 +669,22 @@ P_alv = (P_amb - <span class="num">0.0627</span>) × <span class="num">0.7902</s
 k     = ln(2) / t½                       <span class="cmt">// constante de tiempo del compartimento</span>
 P_t  += (P_alv - P_t) × (1 - e^(-k×Δt)) <span class="cmt">// nueva carga en el tejido</span></pre>
 
+    <div class="math-block">
+      <p>Presión ambiente (agua salada) y presión alveolar de N₂</p>
+      \[
+        P_{amb} = 1{,}0 + \frac{d}{10} \quad \text{[bar]}
+        \qquad
+        P_{alv} = \bigl(P_{amb} - P_{H_2O}\bigr)\cdot F_{N_2}
+      \]
+      <p style="margin-top:6px;">con \(P_{H_2O} = 0{,}0627\,\text{bar}\) (vapor de agua a 37 °C) y \(F_{N_2} = 0{,}7902\)</p>
+      <p>Integración de Haldane — carga del tejido \(i\) tras un intervalo \(\Delta t\)</p>
+      \[
+        k_i = \frac{\ln 2}{t_{1/2,i}}
+        \qquad
+        P_{t,i}^{\,\text{nuevo}} = P_{t,i} + \bigl(P_{alv} - P_{t,i}\bigr)\cdot\left(1 - e^{-k_i\,\Delta t}\right)
+      \]
+    </div>
+
     <p>
       A mayor profundidad, <code>P_alv</code> sube y los tejidos se cargan de N₂.
       Al ascender, <code>P_alv</code> baja y los tejidos eliminan N₂. Los compartimentos rápidos
@@ -640,6 +698,12 @@ P_t  += (P_alv - P_t) × (1 - e^(-k×Δt)) <span class="cmt">// nueva carga en e
       descompresiva). Este límite depende de la presión ambiente:
     </p>
     <pre>M_i = a_i + P_amb / b_i</pre>
+    <div class="math-block">
+      \[
+        M_i(P_{amb}) = a_i + \frac{P_{amb}}{b_i}
+      \]
+      <p>Si \(P_{t,i} > M_i\) para algún compartimento, el buceador no puede ascender directamente a \(P_{amb}\).</p>
+    </div>
     <p>
       Si la carga del tejido <code>P_t &gt; M_i</code>, el buceador <strong>no puede ascender directamente</strong>
       a esa presión: necesita una parada de descompresión.
@@ -655,6 +719,19 @@ M_surf_gf = <span class="num">1</span> + GF × (a + <span class="num">1</span>/b
 
 <span class="cmt">// Techo con GF (presión mínima segura de ascenso)</span>
 P_ceil = (P_t - GF × a) / (<span class="num">1</span> + GF × (<span class="num">1</span>/b - <span class="num">1</span>))</pre>
+
+    <div class="math-block">
+      <p>Límite de saturación con factor de gradiente en superficie (\(P_{amb}=1\,\text{bar}\))</p>
+      \[
+        M_{surf,GF,i} = 1 + GF\cdot\!\left(a_i + \frac{1}{b_i} - 1\right)
+      \]
+      <p>Techo de ascenso mínimo seguro (presión a la que puede ascender el buceador)</p>
+      \[
+        P_{ceil,i} = \frac{P_{t,i} - GF\cdot a_i}{1 + GF\cdot\!\left(\dfrac{1}{b_i} - 1\right)}
+        \qquad
+        d_{ceil} = \bigl(\max_i P_{ceil,i} - 1{,}0\bigr)\times 10 \;\text{[m]}
+      \]
+    </div>
 
     <table>
       <thead><tr><th>GF</th><th>Comportamiento</th><th>Uso típico</th></tr></thead>
@@ -682,6 +759,18 @@ ratio = (M_surf_gf - P_t) / (P_alv - P_t)
 
 <span class="cmt">// NDL global = mínimo sobre todos los compartimentos</span>
 NDL = min(t_NDL_1, t_NDL_2, ..., t_NDL_16)</pre>
+
+    <div class="math-block">
+      <p>NDL analítico para el compartimento \(i\) (invirtiendo la ecuación de Haldane)</p>
+      \[
+        t_{NDL,i} = -\frac{1}{k_i}\ln\!\left(1 - \frac{M_{surf,GF,i} - P_{t,i}}{P_{alv} - P_{t,i}}\right)
+        \qquad \text{si } P_{alv} > P_{t,i}
+      \]
+      <p>NDL global — el compartimento más restrictivo impone el límite</p>
+      \[
+        \text{NDL} = \min_{i=1}^{16}\; t_{NDL,i}
+      \]
+    </div>
 
     <h3>Cálculo del techo de ascenso</h3>
     <p>
@@ -899,6 +988,130 @@ cal.sx = avg / cx;   <span class="cmt">// idem para sy, sz</span></pre>
   <span class="str">"ceiling"</span>: <span class="num">0.0</span>,              <span class="cmt">// techo de ascenso en metros (0 = sin deco)</span>
   <span class="str">"in_deco"</span>: <span class="kw">false</span>             <span class="cmt">// true si hay obligación de parada</span>
 }</pre>
+  </section>
+
+  <hr>
+
+  <!-- ═══ REGISTRO SD ═══ -->
+  <section id="sdlog">
+    <h2>Registro de inmersión en tarjeta SD</h2>
+    <p>
+      El firmware escribe automáticamente un registro CSV en la tarjeta microSD montada en
+      <code>/dive.csv</code>. El archivo se crea al arrancar si no existe, y se añaden líneas
+      cada <strong>5 segundos</strong> durante toda la inmersión.
+    </p>
+
+    <div class="card-grid">
+      <div class="info-card">
+        <h4>Fichero</h4>
+        <div class="value mono" style="font-size:15px;">/dive.csv</div>
+        <p>En la raíz de la tarjeta SD (FAT32)</p>
+      </div>
+      <div class="info-card">
+        <h4>Intervalo de escritura</h4>
+        <div class="value">5 s</div>
+        <p>Controlado por <code>s_lastLogMs</code> en <code>logToSD()</code></p>
+      </div>
+      <div class="info-card">
+        <h4>Descarga</h4>
+        <div class="value">HTTP</div>
+        <p>Endpoint <code>GET /data</code> del portal WiFi</p>
+      </div>
+      <div class="info-card">
+        <h4>Borrado</h4>
+        <div class="value">HTTP</div>
+        <p>Endpoint <code>GET /clearlog</code> — recrea el fichero con cabecera</p>
+      </div>
+    </div>
+
+    <h3 id="sdlog-format">Formato CSV</h3>
+    <p>
+      El fichero tiene una línea de cabecera fija seguida de una fila por muestra.
+      El separador es coma; los valores decimales usan punto como separador decimal.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Columna</th><th>Tipo</th><th>Unidad</th><th>Descripción</th><th>Precisión</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">t_s</td><td>entero sin signo</td><td>s</td>
+          <td>Tiempo transcurrido desde el encendido</td><td>1 s</td>
+        </tr>
+        <tr>
+          <td class="mono">prof_m</td><td>decimal</td><td>m</td>
+          <td>Profundidad actual (actualmente simulada)</td><td>0,1 m</td>
+        </tr>
+        <tr>
+          <td class="mono">temp_c</td><td>decimal</td><td>°C</td>
+          <td>Temperatura del agua (placeholder; vendrá del sensor de presión)</td><td>0,1 °C</td>
+        </tr>
+        <tr>
+          <td class="mono">rumbo_deg</td><td>decimal</td><td>°</td>
+          <td>Rumbo magnético compensado por inclinación (0–360°)</td><td>0,1°</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout callout-warn">
+      <div class="callout-title">⚠ Tiempo relativo al encendido</div>
+      <code>t_s</code> es el número de milisegundos del sistema dividido entre 1000, <em>no</em> la hora UTC.
+      Para obtener timestamps absolutos necesitarás un RTC externo o correlacionar con el reloj del ordenador
+      en el momento de la descarga.
+    </div>
+
+    <h3 id="sdlog-example">Ejemplo de fichero</h3>
+    <p>
+      Inmersión de ejemplo a 20 m durante ~10 minutos, incluyendo descenso, fondo y ascenso.
+      Los valores de temperatura son placeholders (el sensor real aún no está integrado).
+    </p>
+
+    <pre><span class="cmt">t_s,prof_m,temp_c,rumbo_deg</span>
+<span class="num">0</span>,0.0,24.5,127.4       <span class="cmt">← encendido en superficie</span>
+<span class="num">5</span>,0.0,24.5,128.1
+<span class="num">10</span>,0.8,24.4,129.0      <span class="cmt">← inicio del descenso</span>
+<span class="num">15</span>,2.3,24.3,130.5
+<span class="num">20</span>,4.7,24.2,131.2
+<span class="num">25</span>,7.1,24.1,131.8
+<span class="num">30</span>,10.4,24.0,132.0
+<span class="num">35</span>,14.2,23.9,131.5
+<span class="num">40</span>,18.0,23.8,131.0
+<span class="num">45</span>,20.0,23.7,130.8     <span class="cmt">← profundidad máxima alcanzada</span>
+<span class="num">50</span>,20.1,23.7,130.9
+<span class="num">55</span>,20.0,23.7,131.2
+<span class="num">60</span>,19.8,23.7,132.0
+...
+<span class="num">420</span>,20.0,23.7,135.6    <span class="cmt">← 7 min en fondo, NDL ≈ 8 min</span>
+<span class="num">425</span>,20.1,23.7,135.8
+<span class="num">430</span>,18.5,23.8,136.0    <span class="cmt">← inicio del ascenso</span>
+<span class="num">435</span>,15.2,23.9,136.1
+<span class="num">440</span>,11.3,24.0,136.0
+<span class="num">445</span>,7.8,24.1,135.8
+<span class="num">450</span>,4.2,24.3,135.5
+<span class="num">455</span>,1.5,24.4,135.2
+<span class="num">460</span>,0.3,24.5,134.9
+<span class="num">465</span>,0.0,24.5,134.6     <span class="cmt">← de vuelta en superficie</span>
+<span class="num">470</span>,0.0,24.5,134.4
+<span class="num">475</span>,0.0,24.5,134.0</pre>
+
+    <div class="callout callout-tip">
+      <div class="callout-title">✓ Análisis posterior</div>
+      El fichero CSV puede abrirse directamente en Excel, LibreOffice Calc o importarse en Python con
+      <code>pandas.read_csv("dive.csv")</code> para trazar el perfil de profundidad,
+      calcular el tiempo de fondo total o verificar los valores de NDL registrados en el monitor serie.
+    </div>
+
+    <h3>Descarga y borrado desde el portal</h3>
+    <div class="endpoint"><span class="method get">GET</span><code>/data</code><span style="color:var(--muted);margin-left:auto;font-size:12px;">Descarga <code>dive.csv</code> como adjunto</span></div>
+    <div class="endpoint"><span class="method get">GET</span><code>/clearlog</code><span style="color:var(--muted);margin-left:auto;font-size:12px;">Borra el log y recrea la cabecera</span></div>
+
+    <p style="margin-top:12px;">
+      El portal WiFi incluye un botón <strong>"Descargar log"</strong> que lanza
+      <code>GET /data</code>, y un botón <strong>"Borrar log"</strong> que llama a
+      <code>GET /clearlog</code> tras confirmación del usuario.
+      Tras el borrado el fichero queda con la línea de cabecera lista para la próxima inmersión.
+    </p>
   </section>
 
   <hr>
