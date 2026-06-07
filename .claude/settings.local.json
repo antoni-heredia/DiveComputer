@@ -28,7 +28,13 @@
       "PowerShell(gh api repos/guyfleeman/libbuhlmann/git/trees/master --jq '.tree[] | select\\(.type==\"blob\"\\) | .path' 2>&1)",
       "WebFetch(domain:en.wikipedia.org)",
       "PowerShell(where.exe pio 2>$null; Get-Command pio -ErrorAction SilentlyContinue; ls \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" -ErrorAction SilentlyContinue)",
-      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 20)"
+      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 20)",
+      "WebFetch(domain:api.anthropic.com)",
+      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; $env:PATH += \";$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\"; pio run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 40)",
+      "PowerShell(Get-WmiObject Win32_PnPEntity | Where-Object { $_.Name -match \"COM\\\\d+\" -and \\($_.Name -match \"USB\" -or $_.Name -match \"Serial\" -or $_.Name -match \"CP210\" -or $_.Name -match \"CH34\" -or $_.Name -match \"FTDI\"\\) } | Select-Object Name)",
+      "Bash(~/.platformio/penv/bin/pio run *)",
+      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 35)",
+      "PowerShell(cd \"C:\\\\Users\\\\ahere\\\\Documents\\\\PlatformIO\\\\Projects\\\\Brujula\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e esp32-s3-devkitc-1 2>&1 | Select-Object -Last 40)"
     ]
   }
 }

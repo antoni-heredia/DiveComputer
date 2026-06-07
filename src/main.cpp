@@ -13,6 +13,7 @@
 #include <DNSServer.h>
 #include <Adafruit_NeoPixel.h>
 #include "deco.h"
+#include "web.h"
 
 // LED RGB integrado — GPIO 48 solo disponible en S3; C3 lo omite (GPIO 8 colisiona con TFT MOSI)
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
@@ -95,6 +96,10 @@ static void updateRGBLed(float depth) {
 #define SD_CS   6
 #define SD_MISO 5
 
+// Pines MS5837 (Wire1 — Core 0)
+#define MS5837_SDA_PIN 8
+#define MS5837_SCL_PIN 13
+
 // Instanciamos la pantalla con hardware SPI (CS, DC, RST)
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
@@ -103,6 +108,94 @@ Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
 
 // Acelerometro
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(54321);
+
+// ---------------------------------------------------------------------------
+// MS5837 driver directo sobre Wire1 (la librería BlueRobotics usa Wire global)
+// Protocolo: datasheet TE Connectivity MS5837-30BA
+// ---------------------------------------------------------------------------
+#define MS5837_ADDR        0x76
+#define MS5837_RESET       0x1E
+#define MS5837_ADC_READ    0x00
+#define MS5837_PROM_READ   0xA0
+#define MS5837_CONV_D1     0x4A   // OSR=8192
+#define MS5837_CONV_D2     0x5A   // OSR=8192
+
+static uint16_t s_ms5837C[8];          // PROM calibration words
+static bool     s_ms5837Ok = false;
+
+static uint8_t ms5837_crc4(uint16_t prom[]) {
+  uint16_t n_rem = 0;
+  prom[0] = prom[0] & 0x0FFF;
+  prom[7] = 0;
+  for (uint8_t i = 0; i < 16; i++) {
+    n_rem ^= (i % 2 == 1) ? (uint16_t)(prom[i>>1] & 0x00FF)
+                           : (uint16_t)(prom[i>>1] >> 8);
+    for (uint8_t b = 8; b > 0; b--)
+      n_rem = (n_rem & 0x8000) ? (n_rem << 1) ^ 0x3000 : (n_rem << 1);
+  }
+  return (n_rem >> 12) & 0x000F;
+}
+
+static bool ms5837_init() {
+  Wire1.beginTransmission(MS5837_ADDR);
+  Wire1.write(MS5837_RESET);
+  Wire1.endTransmission();  // sensor resetea sin ACK — ignorar retorno
+  delay(10);
+  memset(s_ms5837C, 0, sizeof(s_ms5837C));  // elemento [7] debe ser 0 para CRC
+  for (uint8_t i = 0; i < 7; i++) {
+    Wire1.beginTransmission(MS5837_ADDR);
+    Wire1.write(MS5837_PROM_READ + i * 2);
+    Wire1.endTransmission();
+    Wire1.requestFrom((uint8_t)MS5837_ADDR, (uint8_t)2);
+    s_ms5837C[i] = ((uint16_t)Wire1.read() << 8) | Wire1.read();
+  }
+  uint8_t crcRead = s_ms5837C[0] >> 12;       // leer ANTES de que crc4 borre el nibble
+  uint8_t crcCalc = ms5837_crc4(s_ms5837C);
+  return crcCalc == crcRead;
+}
+
+static void ms5837_read(float &depth_m, float &temp_c, float &bar) {
+  auto readADC = [](uint8_t cmd) -> uint32_t {
+    Wire1.beginTransmission(MS5837_ADDR);
+    Wire1.write(cmd);
+    Wire1.endTransmission();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    Wire1.beginTransmission(MS5837_ADDR);
+    Wire1.write(MS5837_ADC_READ);
+    Wire1.endTransmission();
+    Wire1.requestFrom((uint8_t)MS5837_ADDR, (uint8_t)3);
+    return ((uint32_t)Wire1.read() << 16) |
+           ((uint32_t)Wire1.read() << 8)  |
+            (uint32_t)Wire1.read();
+  };
+
+  uint32_t D1 = readADC(MS5837_CONV_D1);
+  uint32_t D2 = readADC(MS5837_CONV_D2);
+
+  // First-order (30BA model)
+  int32_t  dT   = (int32_t)D2 - (uint32_t)s_ms5837C[5] * 256L;
+  int64_t  SENS = (int64_t)s_ms5837C[1] * 32768LL + (int64_t)s_ms5837C[3] * dT / 256LL;
+  int64_t  OFF  = (int64_t)s_ms5837C[2] * 65536LL + (int64_t)s_ms5837C[4] * dT / 128LL;
+  int32_t  P    = (int32_t)((D1 * SENS / 2097152LL - OFF) / 8192LL);
+  int32_t  TEMP = 2000L + (int64_t)dT * s_ms5837C[6] / 8388608LL;
+
+  // Second-order compensation (low temp)
+  if (TEMP / 100 < 20) {
+    int32_t Ti    = (int32_t)(3LL * dT * dT / 8589934592LL);
+    int64_t OFFi  = 3LL * (TEMP - 2000) * (TEMP - 2000) / 2;
+    int64_t SENSi = 5LL * (TEMP - 2000) * (TEMP - 2000) / 8;
+    TEMP -= Ti;
+    OFF  -= OFFi;
+    SENS -= SENSi;
+    P = (int32_t)((D1 * SENS / 2097152LL - OFF) / 8192LL);
+  }
+
+  temp_c  = TEMP / 100.0f;
+  float pressure_Pa = P * 10.0f;  // mbar × 100 → Pa
+  bar     = pressure_Pa / 100000.0f;
+  depth_m = (pressure_Pa - 101300.0f) / (1025.0f * 9.80665f);
+  if (depth_m < 0.0f) depth_m = 0.0f;
+}
 
 // ---------------------------------------------------------------------------
 // Calibración del magnetómetro (hard-iron + soft-iron) + portal WiFi
@@ -134,6 +227,41 @@ static DecoResult        g_deco      = {0.0f, 999.0f, false};
 static bool          s_sdOk      = false;
 static unsigned long s_lastLogMs = 0;
 
+// ── Gestión de sesiones de buceo ──────────────────────────────
+#define DIVE_THRESH      0.5f      // m — umbral inicio/fin de sesión
+#define SURFACE_GRACE_MS 15000UL   // ms en superficie antes de cerrar sesión
+
+static uint8_t       s_sessId      = 0;
+static bool          s_inDive      = false;
+static unsigned long s_sessStartMs = 0;
+static unsigned long s_surfaceMs   = 0;
+
+static void updateDiveSession(float depth) {
+  if (!s_inDive) {
+    if (depth >= DIVE_THRESH) {
+      s_surfaceMs   = 0;
+      s_sessId++;
+      s_inDive      = true;
+      s_sessStartMs = millis();
+      s_lastLogMs   = 0;  // forzar log inmediato
+      if (s_sdOk) {
+        File f = SD.open("/dive.csv", FILE_APPEND);
+        if (f) { f.printf("#SESSION %u\n", s_sessId); f.close(); }
+      }
+    }
+  } else {
+    if (depth < DIVE_THRESH) {
+      if (s_surfaceMs == 0) s_surfaceMs = millis();
+      else if (millis() - s_surfaceMs >= SURFACE_GRACE_MS) {
+        s_inDive    = false;
+        s_surfaceMs = 0;
+      }
+    } else {
+      s_surfaceMs = 0;
+    }
+  }
+}
+
 Preferences prefs;
 WebServer   server(80);
 DNSServer   dnsServer;
@@ -154,259 +282,7 @@ void saveCalibration(void) {
   prefs.end();
 }
 
-// Página del portal de calibración (servida desde flash)
-const char PAGE_HTML[] PROGMEM = R"rawliteral(
-<!DOCTYPE html><html lang="es"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Brujula - Calibracion</title>
-<style>
- body{font-family:system-ui,Arial,sans-serif;margin:0;background:#0e1116;color:#e6edf3}
- .wrap{max-width:480px;margin:0 auto;padding:18px}
- h1{font-size:1.25rem}
- .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:12px 0}
- button{font-size:1rem;padding:12px;border:0;border-radius:8px;margin:5px 0;width:100%;cursor:pointer;color:#fff}
- .start{background:#238636}.stop{background:#1f6feb}.reset{background:#6e7681}
- .state{font-weight:bold}.calibrating{color:#f0883e}.idle{color:#3fb950}
- table{width:100%;border-collapse:collapse;font-size:.85rem}
- td{padding:3px 6px;border-bottom:1px solid #21262d;text-align:right}
- td:first-child{text-align:left;color:#8b949e}
- .big{font-size:2.2rem;text-align:center;margin:6px 0}
- .hint{font-size:.8rem;color:#8b949e}
-</style></head><body><div class="wrap">
-<h1>Calibracion de la brujula</h1>
-<div class="card">
- <div class="big" id="heading">--</div>
- <div>Estado: <span class="state" id="state">--</span> &middot; Muestras: <span id="samples">0</span></div>
-</div>
-<div class="card">
- <button class="start" onclick="cmd('start')">Iniciar calibracion</button>
- <button class="stop" onclick="cmd('stop')">Detener y guardar</button>
- <button class="reset" onclick="if(confirm('Borrar calibracion?'))cmd('reset')">Resetear</button>
- <p class="hint">Pulsa Iniciar y gira el dispositivo lentamente en todas las orientaciones
- (dibuja un "8" en el aire) durante 20-30 s. Despues pulsa Detener y guardar.</p>
-</div>
-<div class="card"><table>
- <tr><td></td><td>X</td><td>Y</td><td>Z</td></tr>
- <tr><td>min</td><td id="mnx">-</td><td id="mny">-</td><td id="mnz">-</td></tr>
- <tr><td>max</td><td id="mxx">-</td><td id="mxy">-</td><td id="mxz">-</td></tr>
- <tr><td>offset</td><td id="ox">-</td><td id="oy">-</td><td id="oz">-</td></tr>
- <tr><td>escala</td><td id="sx">-</td><td id="sy">-</td><td id="sz">-</td></tr>
-</table></div>
-<div class="card">
- <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-  <span style="font-weight:bold">Registro SD <span id="sdcnt" style="font-size:.8rem;color:#8b949e">cargando...</span></span>
-  <div>
-   <button onclick="downloadChart()" style="font-size:.85rem;padding:6px 12px;border:0;border-radius:6px;background:#1f6feb;color:#fff;cursor:pointer;margin-right:4px">&#8659; PNG</button>
-   <button class="reset" onclick="clearLog()" style="width:auto;padding:6px 12px">Borrar</button>
-  </div>
- </div>
- <canvas id="chart" width="440" height="210" style="width:100%;border-radius:6px;display:block"></canvas>
-</div>
-<div class="card">
- <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-  <span style="font-weight:bold">Trayectoria <span style="font-size:.8rem;color:#8b949e">(velocidad constante)</span></span>
-  <button onclick="downloadMap()" style="font-size:.85rem;padding:6px 12px;border:0;border-radius:6px;background:#1f6feb;color:#fff;cursor:pointer">&#8659; PNG</button>
- </div>
- <canvas id="mapcanvas" width="340" height="340" style="width:100%;border-radius:6px;display:block"></canvas>
-</div>
-</div>
-<script>
-function cmd(c){fetch('/'+c).then(function(){setTimeout(upd,120)})}
-function upd(){fetch('/status').then(function(r){return r.json()}).then(function(d){
- document.getElementById('heading').textContent=d.heading.toFixed(0)+'°';
- var s=document.getElementById('state');s.textContent=d.state;s.className='state '+d.state;
- document.getElementById('samples').textContent=d.samples;
- var mn=['mnx','mny','mnz'],mx=['mxx','mxy','mxz'];
- d.min.forEach(function(v,i){document.getElementById(mn[i]).textContent=v.toFixed(1)});
- d.max.forEach(function(v,i){document.getElementById(mx[i]).textContent=v.toFixed(1)});
- ['ox','oy','oz'].forEach(function(k,i){document.getElementById(k).textContent=d.offset[i].toFixed(2)});
- ['sx','sy','sz'].forEach(function(k,i){document.getElementById(k).textContent=d.scale[i].toFixed(3)});
-})}
-setInterval(upd,400);upd();
-function drawChart(data){
- var cv=document.getElementById('chart'),ctx=cv.getContext('2d');
- var W=cv.width,H=cv.height,pl=46,pr=46,pt=18,pb=28,cW=W-pl-pr,cH=H-pt-pb;
- ctx.fillStyle='#0e1116';ctx.fillRect(0,0,W,H);
- if(data.length<2){
-  ctx.fillStyle='#8b949e';ctx.font='13px system-ui';ctx.textAlign='center';
-  ctx.fillText('Sin datos suficientes',W/2,H/2);return;
- }
- var dep=data.map(function(r){return r[1]}),hdg=data.map(function(r){return r[3]});
- var dMin=0,dMax=Math.max.apply(null,dep);
- var hMin=Math.min.apply(null,hdg),hMax=Math.max.apply(null,hdg);
- var dp=dMax*0.12||2;dMax+=dp;
- var hp=(hMax-hMin)*0.12||5;hMin-=hp;hMax+=hp;
- var tMin=data[0][0],tMax=data[data.length-1][0]||1;
- function tx(t){return pl+(t-tMin)/(tMax-tMin)*cW}
- function dy(d){return pt+(d-dMin)/(dMax-dMin)*cH}
- function hy(h){return pt+cH-(h-hMin)/(hMax-hMin)*cH}
- // grid
- ctx.strokeStyle='#21262d';ctx.lineWidth=1;
- for(var i=0;i<=4;i++){
-  var y=pt+i*cH/4;
-  ctx.beginPath();ctx.moveTo(pl,y);ctx.lineTo(W-pr,y);ctx.stroke();
-  ctx.fillStyle='#3fb950';ctx.font='10px system-ui';ctx.textAlign='right';
-  ctx.fillText((-i*(dMax-dMin)/4).toFixed(1),pl-4,y+3);
-  ctx.fillStyle='#58a6ff';ctx.textAlign='left';
-  ctx.fillText((hMax-i*(hMax-hMin)/4).toFixed(0),W-pr+4,y+3);
- }
- // axes
- ctx.strokeStyle='#30363d';ctx.lineWidth=1;
- ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+cH);ctx.lineTo(W-pr,pt+cH);ctx.lineTo(W-pr,pt);ctx.stroke();
- // x labels
- ctx.fillStyle='#8b949e';ctx.font='10px system-ui';ctx.textAlign='center';
- [0,0.25,0.5,0.75,1].forEach(function(f){
-  var t=Math.round(tMin+f*(tMax-tMin));
-  ctx.fillText(t+'s',pl+f*cW,pt+cH+14);
- });
- // depth line + fill
- ctx.strokeStyle='#3fb950';ctx.lineWidth=2;ctx.lineJoin='round';
- ctx.beginPath();
- data.forEach(function(r,i){if(i===0)ctx.moveTo(tx(r[0]),dy(r[1]));else ctx.lineTo(tx(r[0]),dy(r[1]))});
- ctx.stroke();
- ctx.globalAlpha=0.12;ctx.fillStyle='#3fb950';
- ctx.lineTo(tx(data[data.length-1][0]),pt);ctx.lineTo(tx(data[0][0]),pt);ctx.closePath();ctx.fill();
- ctx.globalAlpha=1;
- // heading line
- ctx.strokeStyle='#58a6ff';ctx.lineWidth=1.5;
- ctx.beginPath();
- data.forEach(function(r,i){if(i===0)ctx.moveTo(tx(r[0]),hy(r[3]));else ctx.lineTo(tx(r[0]),hy(r[3]))});
- ctx.stroke();
- // y labels
- ctx.save();ctx.translate(10,pt+cH/2);ctx.rotate(-Math.PI/2);
- ctx.fillStyle='#3fb950';ctx.font='bold 10px system-ui';ctx.textAlign='center';
- ctx.fillText('Prof (m)',0,0);ctx.restore();
- ctx.save();ctx.translate(W-8,pt+cH/2);ctx.rotate(Math.PI/2);
- ctx.fillStyle='#58a6ff';ctx.font='bold 10px system-ui';ctx.textAlign='center';
- ctx.fillText('Rumbo (°)',0,0);ctx.restore();
- // legend
- ctx.fillStyle='#3fb950';ctx.fillRect(pl+4,pt+2,10,3);
- ctx.fillStyle='#e6edf3';ctx.font='10px system-ui';ctx.textAlign='left';ctx.fillText('Prof',pl+18,pt+6);
- ctx.fillStyle='#58a6ff';ctx.fillRect(pl+52,pt+2,10,3);
- ctx.fillStyle='#e6edf3';ctx.fillText('Rumbo',pl+66,pt+6);
-}
-function downloadChart(){
- var cv=document.getElementById('chart');
- var url=cv.toDataURL('image/png');
- // Intento estándar (funciona en desktop y Android Chrome)
- var a=document.createElement('a');a.href=url;a.download='registro_buceo.png';
- document.body.appendChild(a);a.click();document.body.removeChild(a);
- // Overlay universal: en iOS el atributo download se ignora; pulsa largo sobre la imagen para guardar
- var ov=document.createElement('div');
- ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
- ov.innerHTML='<p style="color:#e6edf3;margin:0 0 10px;font-size:.85rem;text-align:center">En iOS: mant&eacute;n pulsado &rarr; Guardar imagen<br>En Android/PC: la descarga ya empez&oacute;</p>'
-  +'<img src="'+url+'" style="max-width:100%;border-radius:8px;box-shadow:0 4px 24px #000">'
-  +'<button onclick="this.parentElement.remove()" style="margin-top:14px;padding:10px 28px;border:0;border-radius:8px;background:#238636;color:#fff;font-size:1rem;cursor:pointer">Cerrar</button>';
- document.body.appendChild(ov);
-}
-function drawMap(data){
- var cv=document.getElementById('mapcanvas'),ctx=cv.getContext('2d');
- var W=cv.width,H=cv.height,pad=36;
- ctx.fillStyle='#0e1116';ctx.fillRect(0,0,W,H);
- if(data.length<2){
-  ctx.fillStyle='#8b949e';ctx.font='13px system-ui';ctx.textAlign='center';
-  ctx.fillText('Sin datos suficientes',W/2,H/2);return;
- }
- // Integrar trayectoria (velocidad=1 u/s, N arriba)
- var pts=[{x:0,y:0}];
- for(var i=1;i<data.length;i++){
-  var dt=data[i][0]-data[i-1][0];
-  var r=data[i][3]*Math.PI/180;
-  var p=pts[pts.length-1];
-  pts.push({x:p.x+Math.sin(r)*dt, y:p.y-Math.cos(r)*dt});
- }
- // Bounding box cuadrada con margen
- var xs=pts.map(function(p){return p.x}),ys=pts.map(function(p){return p.y});
- var x0=Math.min.apply(null,xs),x1=Math.max.apply(null,xs);
- var y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys);
- var span=Math.max(x1-x0,y1-y0)||10;
- var cx=(x0+x1)/2,cy=(y0+y1)/2;
- x0=cx-span*0.6;x1=cx+span*0.6;y0=cy-span*0.6;y1=cy+span*0.6;
- var sc=Math.min((W-2*pad)/(x1-x0),(H-2*pad)/(y1-y0));
- function mx(x){return W/2+(x-cx)*sc}
- function my(y){return H/2+(y-cy)*sc}
- // Grid
- ctx.strokeStyle='#1c2128';ctx.lineWidth=1;
- var step=Math.pow(10,Math.floor(Math.log10(span*0.4)));
- for(var g=Math.ceil(x0/step)*step;g<=x1;g+=step){
-  ctx.beginPath();ctx.moveTo(mx(g),pad);ctx.lineTo(mx(g),H-pad);ctx.stroke();
- }
- for(var g=Math.ceil(y0/step)*step;g<=y1;g+=step){
-  ctx.beginPath();ctx.moveTo(pad,my(g));ctx.lineTo(W-pad,my(g));ctx.stroke();
- }
- // Ejes cruzados en origen
- ctx.strokeStyle='#30363d';ctx.lineWidth=1;
- ctx.beginPath();ctx.moveTo(mx(0),pad);ctx.lineTo(mx(0),H-pad);ctx.stroke();
- ctx.beginPath();ctx.moveTo(pad,my(0));ctx.lineTo(W-pad,my(0));ctx.stroke();
- // Trayectoria con degradado azul→verde
- for(var i=1;i<pts.length;i++){
-  var t=i/(pts.length-1);
-  var r=Math.round(63*t+30),g2=Math.round(180*t+50),b=Math.round(150*(1-t)+30);
-  ctx.strokeStyle='rgba('+r+','+g2+','+b+',0.85)';
-  ctx.lineWidth=2.5;ctx.lineJoin='round';
-  ctx.beginPath();ctx.moveTo(mx(pts[i-1].x),my(pts[i-1].y));ctx.lineTo(mx(pts[i].x),my(pts[i].y));ctx.stroke();
- }
- // Punto de inicio
- ctx.fillStyle='#ffffff';
- ctx.beginPath();ctx.arc(mx(pts[0].x),my(pts[0].y),5,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='#8b949e';ctx.font='10px system-ui';ctx.textAlign='left';
- ctx.fillText('inicio',mx(pts[0].x)+7,my(pts[0].y)+4);
- // Flecha de posición actual (triángulo apuntando al rumbo)
- var last=pts[pts.length-1];
- var hdgR=data[data.length-1][3]*Math.PI/180;
- var lx=mx(last.x),ly=my(last.y),ar=13;
- ctx.fillStyle='#3fb950';
- ctx.beginPath();
- ctx.moveTo(lx+Math.sin(hdgR)*ar,   ly-Math.cos(hdgR)*ar);
- ctx.lineTo(lx+Math.sin(hdgR+2.3)*ar*0.4, ly-Math.cos(hdgR+2.3)*ar*0.4);
- ctx.lineTo(lx+Math.sin(hdgR-2.3)*ar*0.4, ly-Math.cos(hdgR-2.3)*ar*0.4);
- ctx.closePath();ctx.fill();
- // Rosa de norte (esquina superior derecha)
- var nx=W-22,ny=22,nl=12;
- ctx.strokeStyle='#ff4444';ctx.lineWidth=2;
- ctx.beginPath();ctx.moveTo(nx,ny+nl);ctx.lineTo(nx,ny-nl);ctx.stroke();
- ctx.fillStyle='#ff4444';
- ctx.beginPath();ctx.moveTo(nx,ny-nl-4);ctx.lineTo(nx-4,ny-nl+4);ctx.lineTo(nx+4,ny-nl+4);ctx.closePath();ctx.fill();
- ctx.fillStyle='#8b949e';ctx.font='bold 10px system-ui';ctx.textAlign='center';
- ctx.fillText('N',nx,ny+nl+12);
- // Escala (en unidades relativas, 1 u = 1 s·v)
- var barU=step,barPx=barU*sc;
- if(barPx>20&&barPx<W*0.4){
-  var bx=pad+4,by=H-10;
-  ctx.strokeStyle='#8b949e';ctx.lineWidth=2;
-  ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+barPx,by);ctx.stroke();
-  ctx.fillStyle='#8b949e';ctx.font='9px system-ui';ctx.textAlign='left';
-  ctx.fillText(barU+' u',bx,by-3);
- }
-}
-function downloadMap(){
- var cv=document.getElementById('mapcanvas');
- var url=cv.toDataURL('image/png');
- var a=document.createElement('a');a.href=url;a.download='trayectoria.png';
- document.body.appendChild(a);a.click();document.body.removeChild(a);
- var ov=document.createElement('div');
- ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
- ov.innerHTML='<p style="color:#e6edf3;margin:0 0 10px;font-size:.85rem;text-align:center">En iOS: mant&eacute;n pulsado &rarr; Guardar imagen<br>En Android/PC: la descarga ya empez&oacute;</p>'
-  +'<img src="'+url+'" style="max-width:100%;border-radius:8px;box-shadow:0 4px 24px #000">'
-  +'<button onclick="this.parentElement.remove()" style="margin-top:14px;padding:10px 28px;border:0;border-radius:8px;background:#238636;color:#fff;font-size:1rem;cursor:pointer">Cerrar</button>';
- document.body.appendChild(ov);
-}
-function loadLog(){fetch('/data').then(function(r){
- if(!r.ok){document.getElementById('sdcnt').textContent='SD no disponible';return Promise.reject()}
- return r.text()
-}).then(function(txt){
- var lines=txt.trim().split('\n');
- var data=lines.slice(1).filter(function(l){return l.trim().length>0}).map(function(l){
-  var c=l.split(',');return[+c[0],+c[1],+c[2],+c[3]]
- });
- document.getElementById('sdcnt').textContent='('+data.length+' registros)';
- drawChart(data);
- drawMap(data);
-}).catch(function(){})}
-function clearLog(){if(confirm('Borrar el registro de la SD?'))fetch('/clearlog').then(function(){setTimeout(loadLog,200)})}
-setInterval(loadLog,6000);loadLog();
-</script></body></html>
-)rawliteral";
+// PAGE_HTML se define en web.h (portal completo Bitácora de Buceo)
 
 void handleRoot(void)  { server.send_P(200, "text/html", PAGE_HTML); }
 
@@ -421,10 +297,278 @@ void handleData(void) {
 void handleClearLog(void) {
   if (s_sdOk) {
     SD.remove("/dive.csv");
+    SD.remove("/meta.txt");
     File f = SD.open("/dive.csv", FILE_WRITE);
-    if (f) { f.println("t_s,prof_m,temp_c,rumbo_deg"); f.close(); }
+    if (f) { f.println("sess,t_s,prof_m,temp_c,rumbo_deg"); f.close(); }
+    s_sessId = 0;
+    s_inDive = false;
   }
   server.send(200, "application/json", "{\"ok\":true}");
+}
+
+// ---------------------------------------------------------------------------
+// /api/dives — convierte dive.csv (multi-sesión) en JSON para el portal
+//
+// Formato CSV: sess,t_s,prof_m,temp_c,rumbo_deg  (cabecera)
+//              #SESSION N  (marcador de inicio de sesión)
+//              N,t_s,prof_m,temp_c,rumbo_deg  (datos)
+// Metadatos por sesión: /meta.txt  →  "id|location|starttime\n"
+// ---------------------------------------------------------------------------
+struct SessInfo {
+  uint8_t  id;
+  uint32_t fileOff;       // offset después del marcador #SESSION (primer dato)
+  float    maxDepth, minDepth, sumDepth;
+  float    maxTemp,  minTemp, sumHeading;
+  float    maxAscent, prevDepth;
+  unsigned long prevT, lastT;
+  long     rows;
+};
+
+// Formato /meta.txt: id|nombre_sitio|lat|lng|starttime
+struct DiveMeta { uint8_t id; char loc[64]; char lat[16]; char lng[16]; char ts[32]; };
+
+static void readMeta(DiveMeta* meta, int& nmeta, int maxn) {
+  nmeta = 0;
+  File fm = SD.open("/meta.txt");
+  if (!fm) return;
+  while (fm.available() && nmeta < maxn) {
+    String line = fm.readStringUntil('\n');
+    line.trim();
+    if (!line.length()) continue;
+    int p1 = line.indexOf('|');
+    int p2 = p1 >= 0 ? line.indexOf('|', p1+1) : -1;
+    int p3 = p2 >= 0 ? line.indexOf('|', p2+1) : -1;
+    int p4 = p3 >= 0 ? line.indexOf('|', p3+1) : -1;
+    if (p1 < 0) continue;
+    meta[nmeta].id = (uint8_t)line.substring(0, p1).toInt();
+    line.substring(p1+1, p2 >= 0 ? p2 : (int)line.length()).toCharArray(meta[nmeta].loc, 64);
+    if (p2 >= 0) line.substring(p2+1, p3 >= 0 ? p3 : (int)line.length()).toCharArray(meta[nmeta].lat, 16);
+    else meta[nmeta].lat[0] = '\0';
+    if (p3 >= 0) line.substring(p3+1, p4 >= 0 ? p4 : (int)line.length()).toCharArray(meta[nmeta].lng, 16);
+    else meta[nmeta].lng[0] = '\0';
+    if (p4 >= 0) line.substring(p4+1).toCharArray(meta[nmeta].ts, 32);
+    else meta[nmeta].ts[0] = '\0';
+    nmeta++;
+  }
+  fm.close();
+}
+
+void handleDives(void) {
+  server.sendHeader("Cache-Control", "no-cache");
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+
+  if (!s_sdOk) { server.send(200, "application/json", F("{\"dives\":[]}")); return; }
+
+  File f = SD.open("/dive.csv");
+  if (!f || f.size() < 20) {
+    if (f) f.close();
+    server.send(200, "application/json", F("{\"dives\":[]}"));
+    return;
+  }
+
+  // ── Pasada 1: estadísticas por sesión ──────────────────────────
+  static SessInfo sess[20];
+  int nsess = 0, cur = -1;
+
+  f.readStringUntil('\n');  // cabecera
+
+  while (f.available() && nsess < 20) {
+    String line = f.readStringUntil('\n');
+    line.trim();
+    if (!line.length()) continue;
+
+    if (line.startsWith(F("#SESSION"))) {
+      cur = nsess++;
+      sess[cur].id       = (uint8_t)line.substring(9).toInt();
+      sess[cur].fileOff  = (uint32_t)f.position();
+      sess[cur].maxDepth = 0;    sess[cur].minDepth = 9999;
+      sess[cur].sumDepth = 0;    sess[cur].sumHeading = 0;
+      sess[cur].maxTemp  = -99;  sess[cur].minTemp = 99;
+      sess[cur].maxAscent = 0;   sess[cur].prevDepth = 0;
+      sess[cur].prevT = 0;       sess[cur].lastT = 0;
+      sess[cur].rows = 0;
+      continue;
+    }
+    if (cur < 0) continue;
+
+    // formato: sess,t_s,prof_m,temp_c,rumbo_deg
+    int c1 = line.indexOf(',');
+    int c2 = c1 >= 0 ? line.indexOf(',', c1+1) : -1;
+    int c3 = c2 >= 0 ? line.indexOf(',', c2+1) : -1;
+    int c4 = c3 >= 0 ? line.indexOf(',', c3+1) : -1;
+    if (c4 < 0) continue;
+
+    unsigned long t = (unsigned long)line.substring(c1+1, c2).toInt();
+    float dep = line.substring(c2+1, c3).toFloat();
+    float tmp = line.substring(c3+1, c4).toFloat();
+    float hdg = line.substring(c4+1).toFloat();
+
+    SessInfo& s = sess[cur];
+    if (dep > s.maxDepth) s.maxDepth = dep;
+    if (dep > 0.3f && dep < s.minDepth) s.minDepth = dep;
+    if (tmp > s.maxTemp) s.maxTemp = tmp;
+    if (tmp < s.minTemp) s.minTemp = tmp;
+    s.sumDepth   += dep;
+    s.sumHeading += hdg;
+    s.lastT       = t;
+    if (s.rows > 0 && t > s.prevT) {
+      float dtMin = (float)(t - s.prevT) / 60.0f;
+      if (dtMin > 0.001f) {
+        float rate = (s.prevDepth - dep) / dtMin;
+        if (rate > s.maxAscent) s.maxAscent = rate;
+      }
+    }
+    s.prevDepth = dep;
+    s.prevT = t;
+    s.rows++;
+  }
+  f.close();
+
+  if (nsess == 0) { server.send(200, "application/json", F("{\"dives\":[]}")); return; }
+
+  // ── Leer metadatos (/meta.txt) ─────────────────────────────────
+  static DiveMeta meta[20];
+  int nmeta = 0;
+  readMeta(meta, nmeta, 20);
+  auto getMeta = [&](uint8_t id) -> DiveMeta* {
+    for (int i = 0; i < nmeta; i++) if (meta[i].id == id) return &meta[i];
+    return nullptr;
+  };
+
+  // ── Respuesta chunked ──────────────────────────────────────────
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  server.sendContent(F("{\"dives\":["));
+
+  char buf[192];
+  bool firstDive = true;
+
+  for (int si = 0; si < nsess; si++) {
+    SessInfo& s = sess[si];
+    if (s.rows == 0) continue;
+    if (s.minDepth > s.maxDepth) s.minDepth = 0;
+
+    DiveMeta* m = getMeta(s.id);
+    const char* loc = (m && m->loc[0]) ? m->loc : "";
+    const char* ts  = (m && m->ts[0])  ? m->ts  : "";
+    float avgDepth   = s.sumDepth   / (float)s.rows;
+    float avgHeading = s.sumHeading / (float)s.rows;
+    float durMin     = (float)s.lastT / 60.0f;
+
+    if (!firstDive) server.sendContent(F(","));
+    firstDive = false;
+
+    snprintf(buf, sizeof(buf), "{\"id\":\"d-%03u\",\"site\":\"Inmersi\xC3\xB3n %u\",", s.id, s.id);
+    server.sendContent(buf);
+    snprintf(buf, sizeof(buf), "\"location\":\"%s\",\"startTime\":\"%s\",\"date\":\"%s\",",
+             loc, ts, ts[0] ? ts : "----");
+    server.sendContent(buf);
+    snprintf(buf, sizeof(buf),
+      "\"durationMin\":%.1f,\"maxDepth\":%.1f,\"avgDepth\":%.1f,\"minDepth\":%.1f,",
+      durMin, s.maxDepth, avgDepth, s.minDepth);
+    server.sendContent(buf);
+    snprintf(buf, sizeof(buf),
+      "\"tempMax\":%.1f,\"tempMin\":%.1f,\"avgHeading\":%.1f,",
+      s.maxTemp > -99 ? s.maxTemp : 0.0f,
+      s.minTemp <  99 ? s.minTemp : 0.0f,
+      avgHeading);
+    server.sendContent(buf);
+    snprintf(buf, sizeof(buf), "\"visibility\":0,\"gas\":\"Aire\",\"maxAscent\":%.1f,", s.maxAscent);
+    server.sendContent(buf);
+    server.sendContent(F("\"hasDeco\":false,\"safetyStop\":{\"depth\":5,\"minutes\":3},\"deco\":null,"));
+    server.sendContent(F("\"samples\":["));
+
+    // ── muestras de esta sesión ────────────────────────────────
+    File f2 = SD.open("/dive.csv");
+    if (f2) {
+      f2.seek(s.fileOff);
+      bool firstRow = true;
+      while (f2.available()) {
+        String line = f2.readStringUntil('\n');
+        line.trim();
+        if (line.startsWith(F("#SESSION"))) break;
+        if (line.length() < 4) continue;
+        int c1 = line.indexOf(',');
+        int c2 = c1 >= 0 ? line.indexOf(',', c1+1) : -1;
+        int c3 = c2 >= 0 ? line.indexOf(',', c2+1) : -1;
+        int c4 = c3 >= 0 ? line.indexOf(',', c3+1) : -1;
+        if (c4 < 0) continue;
+        float tMin = line.substring(c1+1, c2).toFloat() / 60.0f;
+        float dep  = line.substring(c2+1, c3).toFloat();
+        float tmp  = line.substring(c3+1, c4).toFloat();
+        int   hdg  = line.substring(c4+1).toInt();
+        snprintf(buf, sizeof(buf),
+          "%s{\"t\":%.2f,\"depth\":%.1f,\"temp\":%.1f,\"heading\":%d}",
+          firstRow ? "" : ",", tMin, dep, tmp, hdg);
+        server.sendContent(buf);
+        firstRow = false;
+      }
+      f2.close();
+    }
+    server.sendContent(F("]}"));
+  }
+
+  server.sendContent(F("]}"));
+  server.sendContent("");
+}
+
+// ---------------------------------------------------------------------------
+// /api/meta  GET → JSON array de metadatos  POST → actualiza una sesión
+// Params POST: sess=N&location=xxx&starttime=YYYY-MM-DDTHH:MM
+// ---------------------------------------------------------------------------
+void handleMeta(void) {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+
+  if (server.method() == HTTP_GET) {
+    static DiveMeta meta[20]; int nmeta = 0;
+    readMeta(meta, nmeta, 20);
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server.send(200, "application/json", "");
+    server.sendContent(F("["));
+    for (int i = 0; i < nmeta; i++) {
+      char buf[128];
+      snprintf(buf, sizeof(buf), "%s{\"id\":%u,\"location\":\"%s\",\"startTime\":\"%s\"}",
+               i ? "," : "", meta[i].id, meta[i].loc, meta[i].ts);
+      server.sendContent(buf);
+    }
+    server.sendContent(F("]"));
+    server.sendContent("");
+    return;
+  }
+
+  // POST: leer, modificar, reescribir /meta.txt
+  String sessStr = server.arg("sess");
+  if (!sessStr.length() || !s_sdOk) { server.send(400, "application/json", F("{\"ok\":false}")); return; }
+  uint8_t targetId = (uint8_t)sessStr.toInt();
+  String newLoc    = server.arg("location");
+  String newTs     = server.arg("starttime");
+
+  static DiveMeta entries[20]; int n = 0;
+  readMeta(entries, n, 20);
+
+  bool found = false;
+  for (int i = 0; i < n; i++) {
+    if (entries[i].id == targetId) {
+      newLoc.toCharArray(entries[i].loc, 64);
+      newTs.toCharArray(entries[i].ts, 32);
+      found = true; break;
+    }
+  }
+  if (!found && n < 20) {
+    entries[n].id = targetId;
+    newLoc.toCharArray(entries[n].loc, 64);
+    newTs.toCharArray(entries[n].ts, 32);
+    n++;
+  }
+
+  SD.remove("/meta.txt");
+  File fw = SD.open("/meta.txt", FILE_WRITE);
+  if (fw) {
+    for (int i = 0; i < n; i++)
+      fw.printf("%u|%s|%s\n", entries[i].id, entries[i].loc, entries[i].ts);
+    fw.close();
+  }
+  server.send(200, "application/json", F("{\"ok\":true}"));
 }
 
 void handleStart(void) {
@@ -499,13 +643,15 @@ void setupWiFi(void) {
   Serial.print("AP \""); Serial.print(AP_SSID);
   Serial.print("\" -> http://"); Serial.println(WiFi.softAPIP());
   Serial.print("MAC: "); Serial.println(WiFi.softAPmacAddress());
-  server.on("/",        handleRoot);
-  server.on("/start",   handleStart);
-  server.on("/stop",    handleStop);
-  server.on("/reset",   handleReset);
-  server.on("/status",  handleStatus);
-  server.on("/data",    handleData);
-  server.on("/clearlog",handleClearLog);
+  server.on("/",          handleRoot);
+  server.on("/start",     handleStart);
+  server.on("/stop",      handleStop);
+  server.on("/reset",     handleReset);
+  server.on("/status",    handleStatus);
+  server.on("/data",      handleData);
+  server.on("/clearlog",  handleClearLog);
+  server.on("/api/dives", handleDives);
+  server.on("/api/meta",  handleMeta);
 
   // Captive portal: redirigir detección de conectividad de cada SO a la página principal
   auto redir = []() {
@@ -801,21 +947,35 @@ void setupSD(void) {
     return;
   }
   s_sdOk = true;
-  if (!SD.exists("/dive.csv")) {
+  // Detectar formato antiguo (sin columna sess) y reinicializar si es necesario
+  bool needInit = !SD.exists("/dive.csv");
+  if (!needInit) {
+    File fc = SD.open("/dive.csv");
+    if (fc) {
+      String hdr = fc.readStringUntil('\n');
+      fc.close();
+      if (!hdr.startsWith("sess")) needInit = true;  // formato viejo
+    }
+  }
+  if (needInit) {
+    SD.remove("/dive.csv");
+    SD.remove("/meta.txt");
     File f = SD.open("/dive.csv", FILE_WRITE);
-    if (f) { f.println("t_s,prof_m,temp_c,rumbo_deg"); f.close(); }
+    if (f) { f.println("sess,t_s,prof_m,temp_c,rumbo_deg"); f.close(); }
+    Serial.println("SD: archivo inicializado con nuevo formato");
   }
   Serial.println("SD OK");
 }
 
-void logToSD(float depth, float tempC, float heading, unsigned long elapsedMs) {
-  if (!s_sdOk) return;
+void logToSD(float depth, float tempC, float heading) {
+  if (!s_sdOk || !s_inDive) return;
   if (millis() - s_lastLogMs < 5000UL) return;
   s_lastLogMs = millis();
   File f = SD.open("/dive.csv", FILE_APPEND);
   if (!f) return;
-  char line[48];
-  snprintf(line, sizeof(line), "%lu,%.1f,%.1f,%.1f", elapsedMs / 1000UL, depth, tempC, heading);
+  char line[56];
+  unsigned long t_s = (millis() - s_sessStartMs) / 1000UL;
+  snprintf(line, sizeof(line), "%u,%lu,%.1f,%.1f,%.1f", s_sessId, t_s, depth, tempC, heading);
   f.println(line);
   f.close();
 }
@@ -902,6 +1062,15 @@ static float diveProfile(uint32_t t_s) {
 }
 
 // ---------------------------------------------------------------------------
+// MS5837 — inicialización en Wire1 (GPIO 8 SDA, GPIO 13 SCL)
+// ---------------------------------------------------------------------------
+static void setupPressureSensor(void) {
+  Wire1.begin(MS5837_SDA_PIN, MS5837_SCL_PIN);
+  s_ms5837Ok = ms5837_init();
+  Serial.println(s_ms5837Ok ? "MS5837 OK" : "MS5837 no detectado — usando perfil simulado");
+}
+
+// ---------------------------------------------------------------------------
 // Core 0 — adquisición de profundidad + Bühlmann ZHL-16C
 // ---------------------------------------------------------------------------
 void depthTask(void* /*param*/) {
@@ -911,15 +1080,22 @@ void depthTask(void* /*param*/) {
   const float DT_S = 0.1f;  // paso de integración: 100 ms
 
   for (;;) {
-    // TODO: reemplazar con lectura real del sensor de presión (ej. MS5837 en Wire1)
-    uint32_t elapsed_s = (uint32_t)((millis() - g_diveStartMs) / 1000UL);
-    float depth = diveProfile(elapsed_s);
+    float depth, tempC, bar = 0.0f;
+
+    if (s_ms5837Ok) {
+      ms5837_read(depth, tempC, bar);
+    } else {
+      uint32_t elapsed_s = (uint32_t)((millis() - g_diveStartMs) / 1000UL);
+      depth = diveProfile(elapsed_s);
+      tempC = 24.5f;
+    }
 
     engine.update(depth, DT_S);
     DecoResult deco = engine.calculate(depth);
 
     if (xSemaphoreTake(g_dataMutex, portMAX_DELAY) == pdTRUE) {
       g_depth = depth;
+      g_tempC = tempC;
       g_deco  = deco;
       xSemaphoreGive(g_dataMutex);
     }
@@ -945,6 +1121,10 @@ void setup(void) {
   setupWire();
   Serial.println("3. Wire (I2C) OK");
   delay(500);
+
+  setupPressureSensor();
+  Serial.println("3b. MS5837 (Wire1) init");
+  delay(200);
 
   setupMagnetometer();
   Serial.println("4. Magnetometer OK");
@@ -1011,7 +1191,9 @@ void loop(void) {
     deco  = g_deco;
   }
 
-  unsigned long elapsed = millis() - g_diveStartMs;
+  updateDiveSession(depth);
+
+  unsigned long elapsed = s_inDive ? (millis() - s_sessStartMs) : 0;
 
   // Redibujado selectivo: brújula solo si heading cambió ≥1°
   bool hdgChanged = fabsf(heading - s_compassLastHdg) >= 1.0f;
@@ -1025,14 +1207,12 @@ void loop(void) {
     s_compassLastHdg = heading;
   }
 
-  logToSD(depth, tempC, heading, elapsed);
+  logToSD(depth, tempC, heading);
 
 #if HAS_RGB_LED
   updateRGBLed(depth);
 #endif
 
-  Serial.printf("Heading: %.1f  Depth: %.1f m  NDL: %.0f min  Ceil: %.1f m\n",
-                heading, depth, deco.ndl_min, deco.ceiling_m);
 
   delay(30);
 }

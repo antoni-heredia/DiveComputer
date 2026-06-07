@@ -35,6 +35,8 @@ static void scanOnce() {
       else if (addr == 0x18) Serial.print("  <- LSM303-Accel (SA0=0)");
       else if (addr == 0x68) Serial.print("  <- MPU6050/MPU9250 (AD0=0)");
       else if (addr == 0x69) Serial.print("  <- MPU6050/MPU9250 (AD0=1)");
+      else if (addr == 0x76) Serial.print("  <- MS5837 (CSB=GND) / BMP280");
+      else if (addr == 0x77) Serial.print("  <- MS5837 (CSB=VCC) / BMP280");
       Serial.println();
       found++;
     } else if (err == 4) {

@@ -10,18 +10,21 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #0D1117;
-      --surface:  #161B22;
-      --border:   #30363D;
-      --text:     #C9D1D9;
-      --muted:    #6E7681;
-      --c-tft:    #FF9800;
-      --c-mag:    #4CAF50;
-      --c-accel:  #2196F3;
-      --c-power:  #F44336;
-      --c-gnd:    #8B949E;
-      --c-wifi:   #E91E63;
-      --c-unused: #30363D;
+      --bg:         #0D1117;
+      --surface:    #161B22;
+      --border:     #30363D;
+      --text:       #C9D1D9;
+      --muted:      #6E7681;
+      --c-tft:      #FF9800;
+      --c-sd:       #00BCD4;
+      --c-mag:      #4CAF50;
+      --c-accel:    #2196F3;
+      --c-ms5837:   #FF5722;
+      --c-neo:      #9C27B0;
+      --c-power:    #F44336;
+      --c-gnd:      #8B949E;
+      --c-wifi:     #E91E63;
+      --c-unused:   #30363D;
     }
 
     body {
@@ -42,27 +45,12 @@
       flex-wrap: wrap;
       gap: 12px;
     }
-    .header-left h1 {
-      font-size: 22px;
-      font-weight: 600;
-      letter-spacing: -0.3px;
-    }
-    .header-left p {
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 3px;
-      font-family: 'JetBrains Mono', monospace;
-    }
+    .header-left h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+    .header-left p  { color: var(--muted); font-size: 12px; margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
     .copy-btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 8px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      font-family: 'Inter', sans-serif;
-      transition: background .2s, border-color .2s;
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px;
+      font-family: 'Inter', sans-serif; transition: background .2s, border-color .2s;
     }
     .copy-btn:hover { background: #21262D; border-color: #58A6FF; }
 
@@ -84,248 +72,113 @@
       gap: 16px;
     }
     .board-panel h2 {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.8px;
     }
 
     /* ── COMPONENT CARDS ── */
-    .cards-panel {
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
+    .cards-panel { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
     .cards-panel h2 {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin-bottom: 4px;
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;
     }
-    .cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 14px;
-    }
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px;
       transition: border-color .2s, transform .15s;
     }
     .card:hover { border-color: #58A6FF; transform: translateY(-1px); }
-    .card-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .color-swatch {
-      width: 14px;
-      height: 14px;
-      border-radius: 3px;
-      flex-shrink: 0;
-    }
-    .card-name {
-      font-weight: 600;
-      font-size: 15px;
-    }
-    .card-full-name {
-      font-size: 11px;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
+    .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .color-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+    .card-name { font-weight: 600; font-size: 15px; }
+    .card-full-name { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
     .voltage-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      font-family: 'JetBrains Mono', monospace;
-      margin-bottom: 10px;
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace; margin-bottom: 10px;
     }
-    .voltage-33 { background: rgba(33, 150, 243, 0.15); color: #64B5F6; border: 1px solid rgba(33,150,243,.3); }
-    .voltage-5  { background: rgba(244, 67, 54, 0.15);  color: #EF9A9A; border: 1px solid rgba(244,67,54,.3); }
-    .voltage-multi { background: rgba(156, 39, 176, 0.15); color: #CE93D8; border: 1px solid rgba(156,39,176,.3); }
-    .warning-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      background: rgba(255, 152, 0, 0.1);
-      border: 1px solid rgba(255,152,0,.3);
-      color: #FFB74D;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 11px;
-      margin-bottom: 10px;
-    }
-    .pin-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
+    .voltage-33    { background: rgba(33,150,243,.15); color:#64B5F6; border:1px solid rgba(33,150,243,.3); }
+    .voltage-5     { background: rgba(244,67,54,.15);  color:#EF9A9A; border:1px solid rgba(244,67,54,.3); }
+    .voltage-multi { background: rgba(156,39,176,.15); color:#CE93D8; border:1px solid rgba(156,39,176,.3); }
+    .pin-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
     .pin-list li {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
     }
     .pin-num {
-      background: #21262D;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 1px 6px;
-      min-width: 48px;
-      text-align: center;
-      color: #E6EDF3;
+      background: #21262D; border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 6px; min-width: 48px;
+      text-align: center; color: #E6EDF3;
     }
     .pin-role { color: var(--muted); }
     .datasheet-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      margin-top: 12px;
-      font-size: 11px;
-      color: #58A6FF;
-      text-decoration: none;
-      transition: color .2s;
+      display: inline-flex; align-items: center; gap: 5px;
+      margin-top: 12px; font-size: 11px; color: #58A6FF;
+      text-decoration: none; transition: color .2s;
     }
     .datasheet-link:hover { color: #79C0FF; text-decoration: underline; }
 
     /* ── TABLE SECTION ── */
-    .table-section {
-      grid-column: 1 / -1;
-      border-top: 1px solid var(--border);
-      padding: 24px 32px 48px;
-    }
+    .table-section { grid-column: 1/-1; border-top: 1px solid var(--border); padding: 24px 32px 48px; }
     .table-section h2 {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin-bottom: 16px;
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 16px;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
     thead th {
-      text-align: left;
-      padding: 10px 14px;
-      background: #161B22;
-      border-bottom: 2px solid var(--border);
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
+      text-align: left; padding: 10px 14px; background: #161B22;
+      border-bottom: 2px solid var(--border); color: var(--muted);
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px;
+      cursor: pointer; user-select: none; white-space: nowrap;
     }
     thead th:hover { color: var(--text); }
     thead th::after { content: ' ↕'; opacity: .4; }
-    thead th.asc::after { content: ' ↑'; opacity: 1; }
+    thead th.asc::after  { content: ' ↑'; opacity: 1; }
     thead th.desc::after { content: ' ↓'; opacity: 1; }
     tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
     tbody tr:hover { background: #1C2128; }
-    tbody td {
-      padding: 10px 14px;
-      font-family: 'JetBrains Mono', monospace;
-      vertical-align: middle;
-    }
-    .td-pin {
-      font-weight: 600;
-      color: #E6EDF3;
-    }
-    .td-component {
-      font-family: 'Inter', sans-serif;
-      font-weight: 500;
-    }
-    .td-note {
-      font-family: 'Inter', sans-serif;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .row-tint-tft   { background: rgba(255, 152,   0, 0.04); }
-    .row-tint-mag   { background: rgba( 76, 175,  80, 0.04); }
-    .row-tint-accel { background: rgba( 33, 150, 243, 0.04); }
-    .row-tint-power { background: rgba(244,  67,  54, 0.04); }
-    .row-tint-gnd   { background: rgba(139, 148, 158, 0.04); }
-    .row-tint-wifi  { background: rgba(233,  30,  99, 0.04); }
+    tbody td { padding: 10px 14px; font-family: 'JetBrains Mono', monospace; vertical-align: middle; }
+    .td-pin       { font-weight: 600; color: #E6EDF3; }
+    .td-component { font-family: 'Inter', sans-serif; font-weight: 500; }
+    .td-note      { font-family: 'Inter', sans-serif; color: var(--muted); font-size: 12px; }
+    .row-tint-tft    { background: rgba(255,152,  0,.04); }
+    .row-tint-sd     { background: rgba(  0,188,212,.04); }
+    .row-tint-mag    { background: rgba( 76,175, 80,.04); }
+    .row-tint-accel  { background: rgba( 33,150,243,.04); }
+    .row-tint-ms5837 { background: rgba(255, 87, 34,.04); }
+    .row-tint-neo    { background: rgba(156, 39,176,.04); }
+    .row-tint-power  { background: rgba(244, 67, 54,.04); }
+    .row-tint-gnd    { background: rgba(139,148,158,.04); }
+    .row-tint-wifi   { background: rgba(233, 30, 99,.04); }
     .shared-badge {
-      font-family: 'Inter', sans-serif;
-      font-size: 10px;
-      background: rgba(255,255,255,.07);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 1px 5px;
-      margin-left: 6px;
-      color: var(--muted);
+      font-family: 'Inter', sans-serif; font-size: 10px;
+      background: rgba(255,255,255,.07); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 5px; margin-left: 6px; color: var(--muted);
     }
 
     /* ── FOOTER ── */
     footer {
-      text-align: center;
-      padding: 16px;
-      color: var(--muted);
-      font-size: 11px;
-      border-top: 1px solid var(--border);
-      grid-column: 1 / -1;
+      text-align: center; padding: 16px; color: var(--muted); font-size: 11px;
+      border-top: 1px solid var(--border); grid-column: 1/-1;
     }
 
     /* ── LEGEND ── */
-    .legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
-    }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 11px;
-      color: var(--muted);
-    }
-    .legend-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+    .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
     /* ── RESPONSIVE ── */
     @media (max-width: 700px) {
       .main-layout { grid-template-columns: 1fr; }
-      .board-panel { border-right: none; border-bottom: 1px solid var(--border); position: static; }
+      .board-panel { border-right: none; border-bottom: 1px solid var(--border); }
       .table-section { padding: 16px; }
     }
-
-    /* ── PRINT ── */
     @media print {
       body { background: #fff; color: #000; }
-      .board-panel, .cards-panel, .table-section { background: #fff; }
-      .card { border-color: #ccc; }
       .copy-btn { display: none; }
     }
 
     /* ── SVG tooltips ── */
-    .pin-tip {
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity .15s;
-    }
-    .board-svg .pin-group:hover .pin-tip { opacity: 1; }
     .board-svg .pin-group:hover circle,
     .board-svg .pin-group:hover rect { filter: brightness(1.4); }
   </style>
@@ -336,7 +189,7 @@
 <header>
   <div class="header-left">
     <h1>🧭 Brujula — Diagrama de Pines</h1>
-    <p>ESP32-S3 DevKitC-1 &nbsp;·&nbsp; PlatformIO / Arduino Framework &nbsp;·&nbsp; Generado 2026-05-30</p>
+    <p>ESP32-S3 DevKitC-1 &nbsp;·&nbsp; PlatformIO / Arduino Framework &nbsp;·&nbsp; Actualizado 2026-06-07</p>
   </div>
   <button class="copy-btn" onclick="copyEmbed()">📋 Copiar HTML</button>
 </header>
@@ -347,12 +200,11 @@
   <div class="board-panel">
     <h2>ESP32-S3 DevKitC-1</h2>
 
-    <!-- SVG inline del Super Mini ESP32-S3 con pines resaltados -->
-    <svg viewBox="0 0 260 310" xmlns="http://www.w3.org/2000/svg"
+    <svg class="board-svg" viewBox="0 0 260 370" xmlns="http://www.w3.org/2000/svg"
          style="width:100%;max-width:280px;font-family:'JetBrains Mono',monospace;">
 
       <!-- PCB body -->
-      <rect x="85" y="10" width="90" height="290" rx="7"
+      <rect x="85" y="10" width="90" height="350" rx="7"
             fill="#1a2e1a" stroke="#2d6a4f" stroke-width="2"/>
 
       <!-- Antenna notch -->
@@ -360,90 +212,99 @@
             fill="#243624" stroke="#2d6a4f" stroke-width="1.5"/>
       <rect x="115" y="4" width="30" height="16" rx="3"
             fill="#0D1117" stroke="#2d6a4f" stroke-width="1.5"/>
-      <text x="130" y="15" text-anchor="middle" fill="#52b788"
-            font-size="6">WIFI/BT</text>
+      <text x="130" y="15" text-anchor="middle" fill="#52b788" font-size="6">WIFI/BT</text>
 
       <!-- Chip -->
       <rect x="100" y="95" width="60" height="60" rx="4"
             fill="#2d3748" stroke="#4a5568" stroke-width="1.5"/>
-      <text x="130" y="121" text-anchor="middle" fill="#a0aec0"
-            font-size="7" font-weight="600">ESP32</text>
-      <text x="130" y="132" text-anchor="middle" fill="#a0aec0"
-            font-size="7" font-weight="600">-S3</text>
-      <text x="130" y="143" text-anchor="middle" fill="#718096"
-            font-size="5.5">Super Mini</text>
+      <text x="130" y="121" text-anchor="middle" fill="#a0aec0" font-size="7" font-weight="600">ESP32</text>
+      <text x="130" y="132" text-anchor="middle" fill="#a0aec0" font-size="7" font-weight="600">-S3</text>
+      <text x="130" y="143" text-anchor="middle" fill="#718096" font-size="5.5">DevKitC-1</text>
 
-      <!-- ── LEFT PINS (col x=85, line to x=50) ── -->
-      <!-- Each row: line + pad + label -->
+      <!-- ── LEFT PINS ── -->
 
-      <!-- GP0 -->
+      <!-- GP0 (unused) -->
       <line x1="85" y1="38"  x2="55" y2="38"  stroke="#30363D" stroke-width="1.5"/>
       <rect x="30" y="31"  width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
       <text x="42" y="42"  text-anchor="middle" fill="#6E7681" font-size="7.5">GP0</text>
 
-      <!-- GP1  → SDA (I2C) -->
-      <line x1="85" y1="58"  x2="55" y2="58"  stroke="#9C27B0" stroke-width="2"/>
-      <rect x="30" y="51"  width="25" height="14" rx="2" fill="#3b1a4f" stroke="#9C27B0" stroke-width="1.5"/>
-      <text x="42" y="62"  text-anchor="middle" fill="#CE93D8" font-size="7.5" font-weight="600">GP1</text>
-      <text x="26" y="62"  text-anchor="end"    fill="#9C27B0" font-size="6.5">SDA</text>
+      <!-- GP1 → SDA Wire (HMC5883 + LSM303) -->
+      <line x1="85" y1="58"  x2="55" y2="58"  stroke="#4CAF50" stroke-width="2"/>
+      <rect x="30" y="51"  width="25" height="14" rx="2" fill="#0d2b0d" stroke="#4CAF50" stroke-width="1.5"/>
+      <text x="42" y="62"  text-anchor="middle" fill="#81C784" font-size="7.5" font-weight="600">GP1</text>
+      <text x="26" y="62"  text-anchor="end"    fill="#4CAF50" font-size="6.5">SDA</text>
 
-      <!-- GP2  → SCL (I2C) -->
-      <line x1="85" y1="78"  x2="55" y2="78"  stroke="#9C27B0" stroke-width="2"/>
-      <rect x="30" y="71"  width="25" height="14" rx="2" fill="#3b1a4f" stroke="#9C27B0" stroke-width="1.5"/>
-      <text x="42" y="82"  text-anchor="middle" fill="#CE93D8" font-size="7.5" font-weight="600">GP2</text>
-      <text x="26" y="82"  text-anchor="end"    fill="#9C27B0" font-size="6.5">SCL</text>
+      <!-- GP2 → SCL Wire (HMC5883 + LSM303) -->
+      <line x1="85" y1="78"  x2="55" y2="78"  stroke="#4CAF50" stroke-width="2"/>
+      <rect x="30" y="71"  width="25" height="14" rx="2" fill="#0d2b0d" stroke="#4CAF50" stroke-width="1.5"/>
+      <text x="42" y="82"  text-anchor="middle" fill="#81C784" font-size="7.5" font-weight="600">GP2</text>
+      <text x="26" y="82"  text-anchor="end"    fill="#4CAF50" font-size="6.5">SCL</text>
 
-      <!-- GP3  → MOSI (TFT) -->
+      <!-- GP3 → TFT MOSI -->
       <line x1="85" y1="98"  x2="55" y2="98"  stroke="#FF9800" stroke-width="2"/>
       <rect x="30" y="91"  width="25" height="14" rx="2" fill="#3d2200" stroke="#FF9800" stroke-width="1.5"/>
       <text x="42" y="102" text-anchor="middle" fill="#FFB74D" font-size="7.5" font-weight="600">GP3</text>
       <text x="26" y="102" text-anchor="end"    fill="#FF9800" font-size="6">MOSI</text>
 
-      <!-- GP4  → SCLK (TFT) -->
+      <!-- GP4 → TFT SCLK -->
       <line x1="85" y1="118" x2="55" y2="118" stroke="#FF9800" stroke-width="2"/>
       <rect x="30" y="111" width="25" height="14" rx="2" fill="#3d2200" stroke="#FF9800" stroke-width="1.5"/>
       <text x="42" y="122" text-anchor="middle" fill="#FFB74D" font-size="7.5" font-weight="600">GP4</text>
       <text x="26" y="122" text-anchor="end"    fill="#FF9800" font-size="6">SCLK</text>
 
-      <!-- GP5 -->
-      <line x1="85" y1="138" x2="55" y2="138" stroke="#30363D" stroke-width="1.5"/>
-      <rect x="30" y="131" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
-      <text x="42" y="142" text-anchor="middle" fill="#6E7681" font-size="7.5">GP5</text>
+      <!-- GP5 → SD MISO -->
+      <line x1="85" y1="138" x2="55" y2="138" stroke="#00BCD4" stroke-width="2"/>
+      <rect x="30" y="131" width="25" height="14" rx="2" fill="#002a2e" stroke="#00BCD4" stroke-width="1.5"/>
+      <text x="42" y="142" text-anchor="middle" fill="#4DD0E1" font-size="7.5" font-weight="600">GP5</text>
+      <text x="26" y="142" text-anchor="end"    fill="#00BCD4" font-size="6">MISO</text>
 
-      <!-- GP6 -->
-      <line x1="85" y1="158" x2="55" y2="158" stroke="#30363D" stroke-width="1.5"/>
-      <rect x="30" y="151" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
-      <text x="42" y="162" text-anchor="middle" fill="#6E7681" font-size="7.5">GP6</text>
+      <!-- GP6 → SD CS -->
+      <line x1="85" y1="158" x2="55" y2="158" stroke="#00BCD4" stroke-width="2"/>
+      <rect x="30" y="151" width="25" height="14" rx="2" fill="#002a2e" stroke="#00BCD4" stroke-width="1.5"/>
+      <text x="42" y="162" text-anchor="middle" fill="#4DD0E1" font-size="7.5" font-weight="600">GP6</text>
+      <text x="26" y="162" text-anchor="end"    fill="#00BCD4" font-size="5.5">SD_CS</text>
 
-      <!-- GP7 -->
+      <!-- GP7 (unused) -->
       <line x1="85" y1="178" x2="55" y2="178" stroke="#30363D" stroke-width="1.5"/>
       <rect x="30" y="171" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
       <text x="42" y="182" text-anchor="middle" fill="#6E7681" font-size="7.5">GP7</text>
 
-      <!-- GP8 -->
-      <line x1="85" y1="198" x2="55" y2="198" stroke="#30363D" stroke-width="1.5"/>
-      <rect x="30" y="191" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
-      <text x="42" y="202" text-anchor="middle" fill="#6E7681" font-size="7.5">GP8</text>
+      <!-- GP8 → MS5837 SDA (Wire1) -->
+      <line x1="85" y1="198" x2="55" y2="198" stroke="#FF5722" stroke-width="2"/>
+      <rect x="30" y="191" width="25" height="14" rx="2" fill="#3d1000" stroke="#FF5722" stroke-width="1.5"/>
+      <text x="42" y="202" text-anchor="middle" fill="#FF8A65" font-size="7.5" font-weight="600">GP8</text>
+      <text x="26" y="202" text-anchor="end"    fill="#FF5722" font-size="6">SDA1</text>
 
-      <!-- GP9  → RST (TFT) -->
+      <!-- GP9 → TFT RST -->
       <line x1="85" y1="218" x2="55" y2="218" stroke="#FF9800" stroke-width="2"/>
       <rect x="30" y="211" width="25" height="14" rx="2" fill="#3d2200" stroke="#FF9800" stroke-width="1.5"/>
       <text x="42" y="222" text-anchor="middle" fill="#FFB74D" font-size="7.5" font-weight="600">GP9</text>
       <text x="26" y="222" text-anchor="end"    fill="#FF9800" font-size="6">RST</text>
 
-      <!-- GP10 → DC (TFT) -->
+      <!-- GP10 → TFT DC -->
       <line x1="85" y1="238" x2="55" y2="238" stroke="#FF9800" stroke-width="2"/>
       <rect x="30" y="231" width="25" height="14" rx="2" fill="#3d2200" stroke="#FF9800" stroke-width="1.5"/>
       <text x="42" y="242" text-anchor="middle" fill="#FFB74D" font-size="7.5" font-weight="600">GP10</text>
       <text x="26" y="242" text-anchor="end"    fill="#FF9800" font-size="6">DC</text>
 
-      <!-- GP11 → CS (TFT) -->
+      <!-- GP11 → TFT CS -->
       <line x1="85" y1="258" x2="55" y2="258" stroke="#FF9800" stroke-width="2"/>
       <rect x="30" y="251" width="25" height="14" rx="2" fill="#3d2200" stroke="#FF9800" stroke-width="1.5"/>
       <text x="42" y="262" text-anchor="middle" fill="#FFB74D" font-size="7.5" font-weight="600">GP11</text>
       <text x="26" y="262" text-anchor="end"    fill="#FF9800" font-size="6">CS</text>
 
-      <!-- ── RIGHT PINS (col x=175, line to x=205) ── -->
+      <!-- GP12 (unused) -->
+      <line x1="85" y1="278" x2="55" y2="278" stroke="#30363D" stroke-width="1.5"/>
+      <rect x="30" y="271" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
+      <text x="42" y="282" text-anchor="middle" fill="#6E7681" font-size="7.5">GP12</text>
+
+      <!-- GP13 → MS5837 SCL (Wire1) -->
+      <line x1="85" y1="298" x2="55" y2="298" stroke="#FF5722" stroke-width="2"/>
+      <rect x="30" y="291" width="25" height="14" rx="2" fill="#3d1000" stroke="#FF5722" stroke-width="1.5"/>
+      <text x="42" y="302" text-anchor="middle" fill="#FF8A65" font-size="7.5" font-weight="600">GP13</text>
+      <text x="26" y="302" text-anchor="end"    fill="#FF5722" font-size="6">SCL1</text>
+
+      <!-- ── RIGHT PINS ── -->
 
       <!-- 5V -->
       <line x1="175" y1="38"  x2="205" y2="38"  stroke="#F44336" stroke-width="2"/>
@@ -470,62 +331,68 @@
       <rect x="205" y="111" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
       <text x="217" y="122" text-anchor="middle" fill="#6E7681" font-size="6.5">RX44</text>
 
-      <!-- GP21 -->
+      <!-- GP21 (unused) -->
       <line x1="175" y1="138" x2="205" y2="138" stroke="#30363D" stroke-width="1.5"/>
       <rect x="205" y="131" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
       <text x="217" y="142" text-anchor="middle" fill="#6E7681" font-size="7.5">GP21</text>
 
-      <!-- GP20 -->
+      <!-- GP20 (unused) -->
       <line x1="175" y1="158" x2="205" y2="158" stroke="#30363D" stroke-width="1.5"/>
       <rect x="205" y="151" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
       <text x="217" y="162" text-anchor="middle" fill="#6E7681" font-size="7.5">GP20</text>
 
-      <!-- GP19 -->
+      <!-- GP19 (unused) -->
       <line x1="175" y1="178" x2="205" y2="178" stroke="#30363D" stroke-width="1.5"/>
       <rect x="205" y="171" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
       <text x="217" y="182" text-anchor="middle" fill="#6E7681" font-size="7.5">GP19</text>
 
-      <!-- GP18 -->
+      <!-- GP18 (unused) -->
       <line x1="175" y1="198" x2="205" y2="198" stroke="#30363D" stroke-width="1.5"/>
       <rect x="205" y="191" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
       <text x="217" y="202" text-anchor="middle" fill="#6E7681" font-size="7.5">GP18</text>
 
-      <!-- GP17 -->
+      <!-- GP17 (unused) -->
       <line x1="175" y1="218" x2="205" y2="218" stroke="#30363D" stroke-width="1.5"/>
       <rect x="205" y="211" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
       <text x="217" y="222" text-anchor="middle" fill="#6E7681" font-size="7.5">GP17</text>
 
-      <!-- GP16 -->
+      <!-- GP16 (unused) -->
       <line x1="175" y1="238" x2="205" y2="238" stroke="#30363D" stroke-width="1.5"/>
       <rect x="205" y="231" width="25" height="14" rx="2" fill="#21262D" stroke="#30363D" stroke-width="1"/>
       <text x="217" y="242" text-anchor="middle" fill="#6E7681" font-size="7.5">GP16</text>
 
+      <!-- GP48 → NeoPixel LED RGB (interno) -->
+      <line x1="175" y1="258" x2="205" y2="258" stroke="#9C27B0" stroke-width="2"/>
+      <rect x="205" y="251" width="25" height="14" rx="2" fill="#2a0a3d" stroke="#9C27B0" stroke-width="1.5"/>
+      <text x="217" y="262" text-anchor="middle" fill="#CE93D8" font-size="7" font-weight="600">GP48</text>
+      <text x="234" y="262" text-anchor="start"  fill="#9C27B0" font-size="5.5">RGB</text>
+
       <!-- GND -->
-      <line x1="175" y1="258" x2="205" y2="258" stroke="#8B949E" stroke-width="1.5"/>
-      <rect x="205" y="251" width="25" height="14" rx="2" fill="#21262D" stroke="#8B949E" stroke-width="1"/>
-      <text x="217" y="262" text-anchor="middle" fill="#8B949E" font-size="7.5">GND</text>
+      <line x1="175" y1="278" x2="205" y2="278" stroke="#8B949E" stroke-width="1.5"/>
+      <rect x="205" y="271" width="25" height="14" rx="2" fill="#21262D" stroke="#8B949E" stroke-width="1"/>
+      <text x="217" y="282" text-anchor="middle" fill="#8B949E" font-size="7.5">GND</text>
 
       <!-- BOOT button -->
-      <rect x="93"  y="275" width="22" height="12" rx="3" fill="#21262D" stroke="#30363D" stroke-width="1"/>
-      <text x="104" y="284" text-anchor="middle" fill="#6E7681" font-size="5.5">BOOT</text>
+      <rect x="93"  y="318" width="22" height="12" rx="3" fill="#21262D" stroke="#30363D" stroke-width="1"/>
+      <text x="104" y="327" text-anchor="middle" fill="#6E7681" font-size="5.5">BOOT</text>
 
       <!-- RESET button -->
-      <rect x="145" y="275" width="25" height="12" rx="3" fill="#21262D" stroke="#30363D" stroke-width="1"/>
-      <text x="157" y="284" text-anchor="middle" fill="#6E7681" font-size="5.5">RESET</text>
+      <rect x="145" y="318" width="25" height="12" rx="3" fill="#21262D" stroke="#30363D" stroke-width="1"/>
+      <text x="157" y="327" text-anchor="middle" fill="#6E7681" font-size="5.5">RESET</text>
 
       <!-- USB-C port at bottom -->
-      <rect x="113" y="292" width="34" height="10" rx="3" fill="#30363D" stroke="#58A6FF" stroke-width="1.5"/>
-      <text x="130" y="300" text-anchor="middle" fill="#58A6FF" font-size="5.5">USB-C</text>
+      <rect x="113" y="347" width="34" height="10" rx="3" fill="#30363D" stroke="#58A6FF" stroke-width="1.5"/>
+      <text x="130" y="355" text-anchor="middle" fill="#58A6FF" font-size="5.5">USB-C</text>
 
     </svg>
 
     <!-- Legend -->
     <div class="legend">
       <div class="legend-item"><div class="legend-dot" style="background:#FF9800"></div>ST7735 TFT</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div>HMC5883L Mag</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#2196F3"></div>LSM303 Accel</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#9C27B0"></div>I2C Bus</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#E91E63"></div>WiFi AP</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#00BCD4"></div>MicroSD</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div>HMC5883L + LSM303</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#FF5722"></div>MS5837 (Wire1)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#9C27B0"></div>NeoPixel</div>
       <div class="legend-item"><div class="legend-dot" style="background:#F44336"></div>3.3 V</div>
       <div class="legend-item"><div class="legend-dot" style="background:#8B949E"></div>GND</div>
     </div>
@@ -545,17 +412,38 @@
         <div class="card-full-name">Adafruit ST7735 — Pantalla TFT SPI 128×160 1.8"</div>
         <span class="voltage-badge voltage-33">3.3 V</span>
         <ul class="pin-list">
+          <li><span class="pin-num">IO3</span><span class="pin-role">TFT_MOSI — SPI Data out</span></li>
+          <li><span class="pin-num">IO4</span><span class="pin-role">TFT_SCLK — SPI Clock (27 MHz)</span></li>
+          <li><span class="pin-num">IO9</span><span class="pin-role">TFT_RST — Reset (activo LOW)</span></li>
+          <li><span class="pin-num">IO10</span><span class="pin-role">TFT_DC — Data / Command</span></li>
           <li><span class="pin-num">IO11</span><span class="pin-role">TFT_CS — Chip Select</span></li>
-          <li><span class="pin-num">IO10</span><span class="pin-role">TFT_DC — Data/Command</span></li>
-          <li><span class="pin-num">IO9</span><span class="pin-role">TFT_RST — Reset</span></li>
-          <li><span class="pin-num">IO3</span><span class="pin-role">TFT_MOSI — SPI Data</span></li>
-          <li><span class="pin-num">IO4</span><span class="pin-role">TFT_SCLK — SPI Clock</span></li>
           <li><span class="pin-num">3V3</span><span class="pin-role">VCC — Alimentación</span></li>
           <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
         </ul>
         <a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank" rel="noopener">
           ↗ Adafruit ST7735 Product Page
         </a>
+      </div>
+
+      <!-- MicroSD -->
+      <div class="card">
+        <div class="card-header">
+          <div class="color-swatch" style="background:#00BCD4"></div>
+          <span class="card-name">MicroSD</span>
+        </div>
+        <div class="card-full-name">Módulo MicroSD SPI — registro de inmersiones en CSV</div>
+        <span class="voltage-badge voltage-33">3.3 V</span>
+        <ul class="pin-list">
+          <li><span class="pin-num">IO3</span><span class="pin-role">MOSI <span class="shared-badge">SPI compartido TFT</span></span></li>
+          <li><span class="pin-num">IO4</span><span class="pin-role">SCLK <span class="shared-badge">SPI compartido TFT</span></span></li>
+          <li><span class="pin-num">IO5</span><span class="pin-role">MISO — SPI Data in</span></li>
+          <li><span class="pin-num">IO6</span><span class="pin-role">SD_CS — Chip Select</span></li>
+          <li><span class="pin-num">3V3</span><span class="pin-role">VCC — Alimentación</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
+        </ul>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted);">
+          El bus SPI (IO3 MOSI, IO4 SCLK) es compartido con el TFT. Cada periférico usa su propio CS. Logs cada 5 s en <code>/divelog.csv</code>.
+        </div>
       </div>
 
       <!-- HMC5883L -->
@@ -565,11 +453,11 @@
           <span class="card-name">HMC5883L</span>
         </div>
         <div class="card-full-name">Honeywell HMC5883L — Magnetómetro digital 3 ejes (brújula)</div>
-        <span class="voltage-badge voltage-33">3.3 V</span>
+        <span class="voltage-badge voltage-33">3.3 V (IC: 2.16–3.6 V)</span>
         <ul class="pin-list">
-          <li><span class="pin-num">IO1</span><span class="pin-role">SDA — I2C Data (addr 0x1E)</span></li>
-          <li><span class="pin-num">IO2</span><span class="pin-role">SCL — I2C Clock</span></li>
-          <li><span class="pin-num">3V3</span><span class="pin-role">VCC — Alimentación</span></li>
+          <li><span class="pin-num">IO1</span><span class="pin-role">SDA — I2C Wire, addr 0x1E</span></li>
+          <li><span class="pin-num">IO2</span><span class="pin-role">SCL — I2C Wire</span></li>
+          <li><span class="pin-num">3V3</span><span class="pin-role">VCC</span></li>
           <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
         </ul>
         <a class="datasheet-link" href="https://cdn-shop.adafruit.com/datasheets/HMC5883L_3-Axis_Digital_Compass_IC.pdf" target="_blank" rel="noopener">
@@ -584,11 +472,11 @@
           <span class="card-name">LSM303 Accel</span>
         </div>
         <div class="card-full-name">ST LSM303DLHC — Acelerómetro 3 ejes (corrección de inclinación)</div>
-        <span class="voltage-badge voltage-33">3.3 V</span>
+        <span class="voltage-badge voltage-33">3.3 V (IC: 2.16–3.6 V)</span>
         <ul class="pin-list">
-          <li><span class="pin-num">IO1</span><span class="pin-role">SDA — I2C Data (addr 0x18)</span></li>
-          <li><span class="pin-num">IO2</span><span class="pin-role">SCL — I2C Clock</span></li>
-          <li><span class="pin-num">3V3</span><span class="pin-role">VCC — Alimentación</span></li>
+          <li><span class="pin-num">IO1</span><span class="pin-role">SDA — I2C Wire, addr 0x18 (SA0=GND)</span></li>
+          <li><span class="pin-num">IO2</span><span class="pin-role">SCL — I2C Wire</span></li>
+          <li><span class="pin-num">3V3</span><span class="pin-role">VCC</span></li>
           <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
         </ul>
         <a class="datasheet-link" href="https://www.st.com/resource/en/datasheet/lsm303dlhc.pdf" target="_blank" rel="noopener">
@@ -596,7 +484,46 @@
         </a>
       </div>
 
-      <!-- WiFi Calibration Portal -->
+      <!-- MS5837-30BA -->
+      <div class="card" style="border-left: 3px solid #FF5722;">
+        <div class="card-header">
+          <div class="color-swatch" style="background:#FF5722"></div>
+          <span class="card-name">MS5837-30BA</span>
+        </div>
+        <div class="card-full-name">TE Connectivity MS5837-30BA — Sensor de presión y temperatura (0–30 bar, hasta 300 m)</div>
+        <span class="voltage-badge" style="background:rgba(255,87,34,.15);color:#FFAB91;border:1px solid rgba(255,87,34,.3);">1.5–3.6 V · I2C Wire1</span>
+        <ul class="pin-list" style="margin-top:6px;">
+          <li><span class="pin-num">IO8</span><span class="pin-role">SDA — I2C Wire1 (Core 0)</span></li>
+          <li><span class="pin-num">IO13</span><span class="pin-role">SCL — I2C Wire1 (Core 0)</span></li>
+          <li><span class="pin-num">3V3</span><span class="pin-role">VDD — 3.3 V (¡no conectar a 5 V!)</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">GND</span></li>
+        </ul>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted);">
+          Dirección I2C: <code>0x76</code> (CSB→GND). Densidad agua del mar: <code>1025 kg/m³</code>. Resolución de profundidad: ~2 mm. Leído en Core 0 vía <code>Wire1.begin(8, 13)</code>.
+        </div>
+        <a class="datasheet-link" href="https://www.mouser.com/datasheet/2/418/MS5837-30BA-736494.pdf" target="_blank" rel="noopener">
+          ↗ MS5837-30BA Datasheet (TE Connectivity)
+        </a>
+      </div>
+
+      <!-- NeoPixel LED RGB -->
+      <div class="card">
+        <div class="card-header">
+          <div class="color-swatch" style="background:#9C27B0"></div>
+          <span class="card-name">LED RGB NeoPixel</span>
+        </div>
+        <div class="card-full-name">Adafruit NeoPixel WS2812B — LED RGB integrado en ESP32-S3 DevKitC-1</div>
+        <span class="voltage-badge voltage-5">5 V (integrado en placa)</span>
+        <ul class="pin-list">
+          <li><span class="pin-num">IO48</span><span class="pin-role">DATA — control NeoPixel</span></li>
+        </ul>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted);">
+          Rojo fijo ≥30 m · Verde parpadeante en descenso constante · Apagado en reposo.<br>
+          Solo disponible en S3 (la C3 no tiene GPIO 48 libre).
+        </div>
+      </div>
+
+      <!-- Portal WiFi -->
       <div class="card">
         <div class="card-header">
           <div class="color-swatch" style="background:#E91E63"></div>
@@ -607,11 +534,10 @@
         <ul class="pin-list">
           <li><span class="pin-num">SSID</span><span class="pin-role">Brujula-Calib (red abierta)</span></li>
           <li><span class="pin-num">IP</span><span class="pin-role">192.168.4.1 (SoftAP)</span></li>
-          <li><span class="pin-num">Puerto</span><span class="pin-role">HTTP :80 — portal web</span></li>
+          <li><span class="pin-num">:80</span><span class="pin-role">HTTP — portal web calibración</span></li>
         </ul>
         <div style="margin-top:10px;font-size:11px;color:var(--muted);">
-          Rutas: <code>/start</code> · <code>/stop</code> · <code>/reset</code> · <code>/status</code><br>
-          Calibración hard-iron + soft-iron guardada en NVS (Preferences).
+          Rutas: <code>/start</code> · <code>/stop</code> · <code>/reset</code> · <code>/status</code> · <code>/data</code> · <code>/clearlog</code>
         </div>
       </div>
 
@@ -621,11 +547,11 @@
           <div class="color-swatch" style="background:#F44336"></div>
           <span class="card-name">Power Rail</span>
         </div>
-        <div class="card-full-name">ESP32-S3 DevKitC-1 — 3.3 V regulado (onboard LDO)</div>
+        <div class="card-full-name">ESP32-S3 DevKitC-1 — 3.3 V regulado (LDO onboard)</div>
         <span class="voltage-badge voltage-33">3.3 V</span>
         <ul class="pin-list">
-          <li><span class="pin-num">3V3</span><span class="pin-role">→ TFT, HMC5883L, LSM303</span></li>
-          <li><span class="pin-num">5V</span><span class="pin-role">USB-C input (no conectado a periféricos)</span></li>
+          <li><span class="pin-num">3V3</span><span class="pin-role">→ TFT, HMC5883L, LSM303, MS5837, SD</span></li>
+          <li><span class="pin-num">5V</span><span class="pin-role">USB-C / VIN (NeoPixel alimentado internamente)</span></li>
         </ul>
       </div>
 
@@ -635,28 +561,33 @@
           <div class="color-swatch" style="background:#8B949E"></div>
           <span class="card-name">GND</span>
         </div>
-        <div class="card-full-name">Tierra común — todos los componentes comparten GND</div>
+        <div class="card-full-name">Tierra común — todos los periféricos comparten GND</div>
         <ul class="pin-list">
-          <li><span class="pin-num">GND</span><span class="pin-role">→ TFT, HMC5883L, LSM303</span></li>
+          <li><span class="pin-num">GND</span><span class="pin-role">→ TFT, HMC5883L, LSM303, MS5837, SD</span></li>
         </ul>
       </div>
 
     </div>
 
-    <!-- I2C Bus note -->
-    <div style="margin-top:8px; padding:12px 16px; background:#161B22; border:1px solid #30363D; border-left:3px solid #9C27B0; border-radius:6px; font-size:12px; color:#CE93D8;">
-      <strong>Bus I2C compartido:</strong> El HMC5883L (0x1E) y el LSM303 Accel (0x18, SA0=GND) comparten los pines IO1 (SDA) y IO2 (SCL). <code>Wire.begin(I2C_SDA, I2C_SCL)</code> — definido en <code>platformio.ini</code> como <code>I2C_SDA=1</code>, <code>I2C_SCL=2</code>.
+    <!-- I2C bus note -->
+    <div style="margin-top:8px; padding:12px 16px; background:#161B22; border:1px solid #30363D; border-left:3px solid #4CAF50; border-radius:6px; font-size:12px; color:#81C784;">
+      <strong>Wire (I2C, Core 1):</strong> HMC5883L (0x1E) + LSM303 Accel (0x18, SA0=GND) comparten IO1 (SDA) y IO2 (SCL). Definido en <code>platformio.ini</code>: <code>I2C_SDA=1</code>, <code>I2C_SCL=2</code>.
     </div>
 
-    <!-- WiFi note -->
-    <div style="margin-top:8px; padding:12px 16px; background:#161B22; border:1px solid #30363D; border-left:3px solid #E91E63; border-radius:6px; font-size:12px; color:#F48FB1;">
-      <strong>Portal de calibración:</strong> Al arrancar el ESP32-S3 levanta un AP WiFi (<em>Brujula-Calib</em>) en el canal 1. Conectar al AP y abrir <code>http://192.168.4.1</code>. Pulsar <em>Iniciar calibración</em>, rotar el dispositivo en todas las orientaciones ~30 s y pulsar <em>Detener y guardar</em>. Los offsets hard-iron y escalas soft-iron quedan en la NVS y se recuperan en cada arranque.
+    <!-- Wire1 MS5837 note -->
+    <div style="margin-top:8px; padding:12px 16px; background:#161B22; border:1px solid #30363D; border-left:3px solid #FF5722; border-radius:6px; font-size:12px; color:#FFAB91;">
+      <strong>Wire1 (I2C, Core 0):</strong> MS5837-30BA en IO8 (SDA) e IO13 (SCL). Inicializado con <code>Wire1.begin(8, 13)</code>. Bus exclusivo del Core 0 para evitar colisiones con Wire del Core 1. Si el sensor no se detecta al arrancar, <code>depthTask</code> usa el perfil simulado <code>diveProfile()</code>.
+    </div>
+
+    <!-- SPI bus note -->
+    <div style="margin-top:8px; padding:12px 16px; background:#161B22; border:1px solid #30363D; border-left:3px solid #FF9800; border-radius:6px; font-size:12px; color:#FFB74D;">
+      <strong>SPI compartido (TFT + SD):</strong> IO3 (MOSI) e IO4 (SCLK) son usados tanto por el ST7735 como por el módulo MicroSD. El árbitro es el CS: TFT_CS=IO11, SD_CS=IO6. Inicializado con <code>SPI.begin(4, 5, 3)</code> (SCLK, MISO, MOSI).
     </div>
   </div>
 
   <!-- ════════════════ CONNECTION TABLE ════════════════ -->
   <div class="table-section">
-    <h2>Tabla de conexiones</h2>
+    <h2>Tabla de conexiones completa</h2>
     <table id="connTable">
       <thead>
         <tr>
@@ -669,42 +600,66 @@
         </tr>
       </thead>
       <tbody>
-        <tr class="row-tint-mag" style="border-left: 2px solid #9C27B0">
+        <!-- I2C Wire -->
+        <tr class="row-tint-mag" style="border-left: 2px solid #4CAF50">
           <td class="td-pin">IO1</td>
-          <td>SDA <span class="shared-badge">I2C BUS</span></td>
-          <td class="td-component">
-            <span style="color:#4CAF50">HMC5883L</span> + <span style="color:#2196F3">LSM303</span>
-          </td>
+          <td>SDA <span class="shared-badge">Wire · Core 1</span></td>
+          <td class="td-component"><span style="color:#4CAF50">HMC5883L</span> + <span style="color:#2196F3">LSM303</span></td>
           <td>3.3 V</td>
           <td class="td-note">I2C Data — bus compartido (0x1E, 0x18)</td>
           <td><a class="datasheet-link" href="https://cdn-shop.adafruit.com/datasheets/HMC5883L_3-Axis_Digital_Compass_IC.pdf" target="_blank">↗ HMC5883L</a></td>
         </tr>
-        <tr class="row-tint-accel" style="border-left: 2px solid #9C27B0">
+        <tr class="row-tint-accel" style="border-left: 2px solid #4CAF50">
           <td class="td-pin">IO2</td>
-          <td>SCL <span class="shared-badge">I2C BUS</span></td>
-          <td class="td-component">
-            <span style="color:#4CAF50">HMC5883L</span> + <span style="color:#2196F3">LSM303</span>
-          </td>
+          <td>SCL <span class="shared-badge">Wire · Core 1</span></td>
+          <td class="td-component"><span style="color:#4CAF50">HMC5883L</span> + <span style="color:#2196F3">LSM303</span></td>
           <td>3.3 V</td>
           <td class="td-note">I2C Clock — bus compartido</td>
           <td><a class="datasheet-link" href="https://www.st.com/resource/en/datasheet/lsm303dlhc.pdf" target="_blank">↗ LSM303</a></td>
         </tr>
+        <!-- SPI TFT+SD -->
         <tr class="row-tint-tft">
           <td class="td-pin">IO3</td>
-          <td>TFT_MOSI / SPI_MOSI</td>
-          <td class="td-component" style="color:#FF9800">ST7735 TFT</td>
+          <td>MOSI <span class="shared-badge">SPI</span></td>
+          <td class="td-component"><span style="color:#FF9800">ST7735 TFT</span> + <span style="color:#00BCD4">MicroSD</span></td>
           <td>3.3 V</td>
-          <td class="td-note">SPI Data out · <code>SPI.begin(4,-1,3)</code></td>
-          <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit</a></td>
+          <td class="td-note">SPI Data out · <code>SPI.begin(4,5,3)</code></td>
+          <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit ST7735</a></td>
         </tr>
         <tr class="row-tint-tft">
           <td class="td-pin">IO4</td>
-          <td>TFT_SCLK / SPI_CLK</td>
-          <td class="td-component" style="color:#FF9800">ST7735 TFT</td>
+          <td>SCLK <span class="shared-badge">SPI</span></td>
+          <td class="td-component"><span style="color:#FF9800">ST7735 TFT</span> + <span style="color:#00BCD4">MicroSD</span></td>
           <td>3.3 V</td>
           <td class="td-note">SPI Clock · 27 MHz configurado</td>
-          <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit</a></td>
+          <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit ST7735</a></td>
         </tr>
+        <tr class="row-tint-sd">
+          <td class="td-pin">IO5</td>
+          <td>MISO</td>
+          <td class="td-component" style="color:#00BCD4">MicroSD</td>
+          <td>3.3 V</td>
+          <td class="td-note">SPI Data in — solo SD</td>
+          <td>—</td>
+        </tr>
+        <tr class="row-tint-sd">
+          <td class="td-pin">IO6</td>
+          <td>SD_CS</td>
+          <td class="td-component" style="color:#00BCD4">MicroSD</td>
+          <td>3.3 V</td>
+          <td class="td-note">SPI Chip Select — MicroSD</td>
+          <td>—</td>
+        </tr>
+        <!-- MS5837 Wire1 -->
+        <tr class="row-tint-ms5837" style="border-left: 2px solid #FF5722">
+          <td class="td-pin">IO8</td>
+          <td>SDA <span class="shared-badge">Wire1 · Core 0</span></td>
+          <td class="td-component" style="color:#FF5722">MS5837-30BA</td>
+          <td>3.3 V</td>
+          <td class="td-note">I2C Data — addr 0x76 · <code>Wire1.begin(8, 13)</code></td>
+          <td><a class="datasheet-link" href="https://www.mouser.com/datasheet/2/418/MS5837-30BA-736494.pdf" target="_blank">↗ MS5837 Datasheet</a></td>
+        </tr>
+        <!-- TFT -->
         <tr class="row-tint-tft">
           <td class="td-pin">IO9</td>
           <td>TFT_RST</td>
@@ -726,9 +681,28 @@
           <td>TFT_CS</td>
           <td class="td-component" style="color:#FF9800">ST7735 TFT</td>
           <td>3.3 V</td>
-          <td class="td-note">SPI Chip Select</td>
+          <td class="td-note">SPI Chip Select — TFT</td>
           <td><a class="datasheet-link" href="https://www.adafruit.com/product/358" target="_blank">↗ Adafruit</a></td>
         </tr>
+        <!-- MS5837 SCL -->
+        <tr class="row-tint-ms5837" style="border-left: 2px solid #FF5722">
+          <td class="td-pin">IO13</td>
+          <td>SCL <span class="shared-badge">Wire1 · Core 0</span></td>
+          <td class="td-component" style="color:#FF5722">MS5837-30BA</td>
+          <td>3.3 V</td>
+          <td class="td-note">I2C Clock · profundidad + temperatura (10 Hz)</td>
+          <td><a class="datasheet-link" href="https://www.mouser.com/datasheet/2/418/MS5837-30BA-736494.pdf" target="_blank">↗ MS5837 Datasheet</a></td>
+        </tr>
+        <!-- NeoPixel -->
+        <tr class="row-tint-neo">
+          <td class="td-pin">IO48</td>
+          <td>NeoPixel DATA</td>
+          <td class="td-component" style="color:#9C27B0">LED RGB WS2812B</td>
+          <td>5 V (interno)</td>
+          <td class="td-note">Rojo ≥30 m · Verde parpadeante descenso · Solo ESP32-S3</td>
+          <td>—</td>
+        </tr>
+        <!-- WiFi -->
         <tr class="row-tint-wifi">
           <td class="td-pin">WiFi</td>
           <td>SoftAP</td>
@@ -737,12 +711,13 @@
           <td class="td-note">SSID: Brujula-Calib · IP: 192.168.4.1 · Puerto 80</td>
           <td>—</td>
         </tr>
+        <!-- Power -->
         <tr class="row-tint-power">
           <td class="td-pin">3V3</td>
           <td>VCC Power</td>
           <td class="td-component" style="color:#F44336">Power Rail</td>
           <td>3.3 V</td>
-          <td class="td-note">→ TFT VCC, HMC5883L VCC, LSM303 VCC</td>
+          <td class="td-note">→ TFT · HMC5883L · LSM303 · MS5837 · MicroSD</td>
           <td>—</td>
         </tr>
         <tr class="row-tint-gnd">
@@ -750,19 +725,18 @@
           <td>Ground</td>
           <td class="td-component" style="color:#8B949E">GND Rail</td>
           <td>—</td>
-          <td class="td-note">→ TFT GND, HMC5883L GND, LSM303 GND</td>
+          <td class="td-note">→ todos los periféricos</td>
           <td>—</td>
         </tr>
       </tbody>
     </table>
   </div>
 
-  <footer>Generado por Claude &nbsp;·&nbsp; arduino-pin-diagram skill &nbsp;·&nbsp; Proyecto: Brujula / ESP32-S3-DevKitC-1</footer>
+  <footer>Generado por Claude &nbsp;·&nbsp; arduino-pin-diagram skill &nbsp;·&nbsp; Proyecto: Brujula / ESP32-S3-DevKitC-1 &nbsp;·&nbsp; 2026-06-07</footer>
 
 </div><!-- .main-layout -->
 
 <script>
-  // ── Table sorting ──
   let sortDir = {};
   function sortTable(col) {
     const table = document.getElementById('connTable');
@@ -770,7 +744,7 @@
     const rows  = Array.from(tbody.querySelectorAll('tr'));
     const ths   = table.querySelectorAll('thead th');
     sortDir[col] = sortDir[col] === 'asc' ? 'desc' : 'asc';
-    ths.forEach((th, i) => { th.classList.remove('asc','desc'); });
+    ths.forEach(th => th.classList.remove('asc','desc'));
     ths[col].classList.add(sortDir[col]);
     rows.sort((a, b) => {
       const aT = a.cells[col]?.textContent.trim() || '';
@@ -783,10 +757,8 @@
     rows.forEach(r => tbody.appendChild(r));
   }
 
-  // ── Copy embed ──
   function copyEmbed() {
-    const html = document.documentElement.outerHTML;
-    navigator.clipboard.writeText(html).then(() => {
+    navigator.clipboard.writeText(document.documentElement.outerHTML).then(() => {
       const btn = document.querySelector('.copy-btn');
       btn.textContent = '✅ Copiado!';
       setTimeout(() => btn.textContent = '📋 Copiar HTML', 2000);

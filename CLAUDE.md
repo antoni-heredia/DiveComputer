@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ESP32 tilt-compensated dive compass. Reads heading from an HMC5883 magnetometer, corrects for tilt using an LSM303 accelerometer, and renders a 4-zone diving computer UI on a 128×160 ST7735 TFT display. Includes a WiFi AP calibration portal for hard-iron / soft-iron magnetometer correction stored in NVS.
+ESP32 tilt-compensated dive compass and dive computer. Reads heading from an HMC5883 magnetometer, corrects for tilt using an LSM303 accelerometer, reads depth and temperature from an MS5837-30BA pressure sensor, and renders a 4-zone diving computer UI on a 128×160 ST7735 TFT display. Includes a WiFi AP calibration portal for hard-iron / soft-iron magnetometer correction stored in NVS.
 
 ## PlatformIO Commands
 
@@ -37,11 +37,16 @@ The source file `src/main.cpp` has hardcoded `#define` pin values that match the
 |------|-----|--------|------------|
 | 3 | SPI | MOSI | ST7735 TFT |
 | 4 | SPI | SCLK | ST7735 TFT |
+| 5 | SPI | MISO | microSD |
+| 6 | SPI | CS | microSD |
 | 9 | SPI | RST | ST7735 TFT |
 | 10 | SPI | DC | ST7735 TFT |
 | 11 | SPI | CS | ST7735 TFT |
-| 1 | I2C | SDA | HMC5883 + LSM303 |
-| 2 | I2C | SCL | HMC5883 + LSM303 |
+| 1 | I2C (Wire) | SDA | HMC5883 + LSM303 |
+| 2 | I2C (Wire) | SCL | HMC5883 + LSM303 |
+| 8 | I2C (Wire1) | SDA | MS5837-30BA |
+| 13 | I2C (Wire1) | SCL | MS5837-30BA |
+| 48 | — | NeoPixel | LED RGB integrado |
 
 ### ESP32-C3 (`esp32-c3-devkitc-02`)
 
@@ -71,14 +76,15 @@ The firmware uses both Xtensa LX7 cores via FreeRTOS:
 | Core 1 | `loop()` (Arduino default) | Compass, accelerometer, TFT render, WiFi, DNS, SD | ~33 Hz |
 | Core 0 | `depthTask` | Depth sensor + Bühlmann ZHL-16C deco calculations | 10 Hz |
 
-Shared state (`g_depth`, `g_deco`) is protected by `g_dataMutex` (FreeRTOS mutex). Core 1 uses a 5 ms timeout when taking the mutex to avoid blocking the render loop.
+Shared state (`g_depth`, `g_tempC`, `g_deco`) is protected by `g_dataMutex` (FreeRTOS mutex). Core 1 uses a 5 ms timeout when taking the mutex to avoid blocking the render loop.
 
-**Warning:** The I2C bus (`Wire`) is used only from Core 1. A future pressure sensor on Core 0 must use `Wire1` or an additional mutex.
+**I2C bus separation:** `Wire` (GPIO 1/2) is used exclusively from Core 1 for compass + accelerometer. `Wire1` (GPIO 8/13) is used exclusively from Core 0 for the MS5837 pressure sensor. Never cross these buses between cores.
 
 **Initialization order** (`setup()`):
 1. Serial (USB CDC — waits up to 2 s for enumeration)
 2. TFT via SPI (`SPI.begin(TFT_SCLK, -1, TFT_MOSI)` → `tft.initR(INITR_BLACKTAB)` → `setRotation(1)`)
 3. I2C via `Wire.begin(I2C_SDA, I2C_SCL)` (pins from build flags)
+3b. MS5837 via `Wire1.begin(8, 13)` — if not detected, `depthTask` falls back to `diveProfile()` simulation
 4. HMC5883 magnetometer
 5. LSM303 accelerometer (`address 0x18`, SA0=GND)
 6. Load calibration from NVS (`Preferences` namespace `"compass"`)
@@ -95,10 +101,10 @@ Shared state (`g_depth`, `g_deco`) is protected by `g_dataMutex` (FreeRTOS mutex
 7. `logToSD()` every 5 s
 
 **Core 0 data flow (every 100 ms in `depthTask`):**
-1. Read depth (currently simulated — replace with real pressure sensor)
+1. If `s_ms5837Ok`: `pressureSensor.read()` → `depth = pressureSensor.depth()`, `tempC = pressureSensor.temperature()`; else: `diveProfile()` simulation
 2. `engine.update(depth, 0.1f)` — integrate Haldane equation
 3. `engine.calculate(depth)` → `DecoResult {ndl_min, ceiling_m, in_deco}`
-4. Write `g_depth` + `g_deco` under mutex
+4. Write `g_depth` + `g_tempC` + `g_deco` under mutex
 
 **`calculateHeading()` algorithm:**
 1. Remap physical sensor axes to formula frame: sensor-X=down, sensor-Y=left, sensor-Z=forward → formula X=forward, Y=left, Z=up
@@ -184,7 +190,7 @@ WiFi AP SSID `"Brujula-Calib"` (open network). Connect and open `http://192.168.
 - USB CDC: `ARDUINO_USB_MODE=1`, `ARDUINO_USB_CDC_ON_BOOT=1` — Serial waits up to 2 s (won't block indefinitely when running on battery).
 - SPI must be initialized explicitly with `SPI.begin(TFT_SCLK, -1, TFT_MOSI)` before `tft.initR()`.
 - LSM303 I2C address is `0x18` (SA0 pin tied to GND); default library address is `0x19`.
-- `g_depth` is currently simulated (sine wave) in `depthTask` — replace with real pressure sensor (e.g. MS5837 on `Wire1`).
-- `g_tempC` is a placeholder — will come from the pressure sensor when integrated.
+- MS5837-30BA address: `0x76` (CSB to GND). Power: 3.3 V only (1.5–3.6 V range). `setFluidDensity(1025)` for sea water, `1000` for fresh water.
+- If MS5837 is not detected at boot, `depthTask` falls back to `diveProfile()` simulation and `g_tempC` stays at 24.5 °C — check serial output for "MS5837 no detectado".
 - `depthTask` stack is 4 KB; increase to 8 KB when adding full deco stop schedule calculation.
 - `src/main.xxcpp` is an older prototype (magnetometer only, no TFT, no tilt compensation) kept for reference — it is not compiled.
